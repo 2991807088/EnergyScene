@@ -9,6 +9,7 @@ const variablesPath = root('./src/styles/variables.less')
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/EnergyScene/',
   plugins: [react()],
   css: {
     preprocessorOptions: {

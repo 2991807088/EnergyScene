@@ -29,7 +29,7 @@ export const TREE_MODEL_FILES = {
 }
 
 /** 模型在 public/ 下的目录 */
-export const TREE_MODEL_DIR = '/models/trees'
+export const TREE_MODEL_DIR = `${import.meta.env.BASE_URL}models/trees`
 
 export const treeModelUrl = (key) => `${TREE_MODEL_DIR}/${TREE_MODEL_FILES[key]}.glb`
 
