@@ -9,6 +9,7 @@ import WindTurbines from '@/components/WindTurbines'
 import SolarFarm from '@/components/SolarFarm'
 import Forest from '@/components/Forest'
 import Buildings from '@/components/Buildings'
+import FactoryCampus from '@/components/FactoryCampus'
 import TrafficLights from '@/components/TrafficLights'
 import Cars from '@/components/Cars'
 import Weather from '@/components/Weather'
@@ -129,6 +130,8 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0 }) {
         <Forest wind={wind} />
 
         <Buildings />
+
+        <FactoryCampus />
 
         <TrafficLights />
 

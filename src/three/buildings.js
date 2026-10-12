@@ -6,6 +6,7 @@
 // ============================================================
 import * as THREE from 'three'
 import { blockCenterX, blockCenterZ, mulberry32 } from './cityLayout'
+import { isInsideCampus } from './factoryCampus'
 
 export const TYPE = {
   RESIDENTIAL: 'residential',
@@ -186,6 +187,7 @@ export function generateCity(seed = 20261012) {
 
   const meshes = []
   const add = (geoKey, material, position, scale) => meshes.push({ geoKey, material, position, scale })
+  const noop = () => {}
 
   const BLOCKS = 12 // 每轴 12 个街区（n = 0..11）
 
@@ -198,6 +200,11 @@ export function generateCity(seed = 20261012) {
       if (radius < 15) continue // 中心广场（树阵）
       if (rand() < SKIP_RATE) continue // 留空
 
+      // 厂房园区占用的街区不盖楼。
+      // 注意这里**不能**提前 continue：那会把随机流往前挪，整座城市后面的楼全变位置。
+      // 照常跑完生成器、只把输出丢掉，这样园区之外的城市与之前逐字节一致。
+      const sink = isInsideCampus(bx, bz) ? noop : add
+
       const inCbd = radius <= CBD_RADIUS
       const roll = rand()
       const type = inCbd
@@ -209,11 +216,11 @@ export function generateCity(seed = 20261012) {
           : TYPE.RESIDENTIAL
 
       if (type === TYPE.MALL) {
-        addMall({ add, rand, mats: mallMats, detailMat, signMat, bx, bz })
+        addMall({ add: sink, rand, mats: mallMats, detailMat, signMat, bx, bz })
       } else if (type === TYPE.FACTORY) {
-        addFactory({ add, rand, mats: factoryMats, chimneyMat, bx, bz })
+        addFactory({ add: sink, rand, mats: factoryMats, chimneyMat, bx, bz })
       } else {
-        addResidential({ add, rand, mats: residentialMats, detailMat, bx, bz, inCbd })
+        addResidential({ add: sink, rand, mats: residentialMats, detailMat, bx, bz, inCbd })
       }
     }
   }
