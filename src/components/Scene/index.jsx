@@ -10,6 +10,8 @@ import SolarFarm from '@/components/SolarFarm'
 import Forest from '@/components/Forest'
 import Buildings from '@/components/Buildings'
 import FactoryCampus from '@/components/FactoryCampus'
+import ChargingStation from '@/components/ChargingStation'
+import Substation from '@/components/Substation'
 import TrafficLights from '@/components/TrafficLights'
 import Cars from '@/components/Cars'
 import Weather from '@/components/Weather'
@@ -19,6 +21,8 @@ import { SUN_DIRECTION } from '@/three/environments'
 import './index.less'
 
 const _c = new THREE.Color()
+const FOG_TARGET = new THREE.Vector3(0, 3.2, 0)
+const FOG_REFERENCE_DISTANCE = 20
 const lerp = (a, b, t) => a + (b - a) * t
 // 主光位置由 SUN_DIRECTION 推出（只有方向有意义），与视觉太阳保持一致
 const KEY_LIGHT_POS = new THREE.Vector3(...SUN_DIRECTION).normalize().multiplyScalar(20)
@@ -27,12 +31,12 @@ const KEY_LIGHT_POS = new THREE.Vector3(...SUN_DIRECTION).normalize().multiplySc
  * 昼夜环境切换的核心：每帧把天空色、雾、各灯光向目标预设平滑插值。
  * 好处是「白天 <-> 黑夜」不是硬切，而是渐变过渡。
  */
-function DayNightRig({ preset }) {
+function DayNightRig({ preset, weather }) {
   const ambient = useRef()
   const hemi = useRef()
   const key = useRef()
   const rim = useRef()
-  const { scene } = useThree()
+  const { scene, camera, controls } = useThree()
 
   useFrame((_, dt) => {
     const k = 1 - Math.exp(-6 * dt) // 平滑系数（时间常数约 0.17s）
@@ -45,9 +49,14 @@ function DayNightRig({ preset }) {
 
     // 雾
     if (scene.fog) {
+      const cameraDistance = camera.position.distanceTo(controls?.target ?? FOG_TARGET)
+      const fogScale = weather === 'clear' ? 1 : Math.max(1, cameraDistance / FOG_REFERENCE_DISTANCE)
       scene.fog.color.lerp(_c.set(preset.fog.color), k)
-      scene.fog.near = lerp(scene.fog.near, preset.fog.near, k)
-      scene.fog.far = lerp(scene.fog.far, preset.fog.far, k)
+      scene.fog.near = lerp(scene.fog.near, preset.fog.near * fogScale, k)
+      scene.fog.far = Math.max(
+        lerp(scene.fog.far, preset.fog.far * fogScale, k),
+        cameraDistance * 1.5
+      )
     }
 
     // 环境光
@@ -99,7 +108,7 @@ function DayNightRig({ preset }) {
   )
 }
 
-export default function Scene({ mode = 'night', weather = 'clear', wind = 0 }) {
+export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1 }) {
   const preset = useMemo(() => mergeEnvironment(mode, weather), [mode, weather])
 
   return (
@@ -107,14 +116,14 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0 }) {
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [5, 3.4, 6], fov: 45 }}
+        camera={{ position: [5, 3.4, 6], fov: 45, near: 0.5, far: 1500 }}
       >
         <color attach="background" args={['#0a0d13']} />
         {/* 雾的初值：挂载后立刻由 DayNightRig 拉到预设值，所以给个「远」的初值，
             避免加载瞬间先糊一层雾再散开 */}
         <fog attach="fog" args={['#cfe2f5', 240, 700]} />
 
-        <DayNightRig preset={preset} />
+        <DayNightRig preset={preset} weather={weather} />
 
         {/* 天空盒：同时作为背景与环境贴图（反射用），替代原来的假光源环境 */}
         <Sky palette={preset.sky} envIntensity={preset.envIntensity} />
@@ -129,9 +138,13 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0 }) {
 
         <Forest wind={wind} />
 
-        <Buildings />
+        <Buildings lightLevel={buildingLight} />
 
         <FactoryCampus />
+
+        <ChargingStation />
+
+        <Substation />
 
         <TrafficLights />
 
@@ -147,7 +160,7 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0 }) {
           enableDamping
           dampingFactor={0.08}
           minDistance={3}
-          maxDistance={260}
+          maxDistance={420}
           maxPolarAngle={Math.PI / 2 - 0.02}
         />
       </Canvas>

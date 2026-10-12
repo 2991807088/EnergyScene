@@ -33,7 +33,7 @@ const SPIN_SMOOTH = 2.2 // 转速变化的平滑系数：拖动滑块时转速�
  * 转速由「风力」滑块决定（getTurbineSpin：切入风速以下停转，之后按曲线加速）。
  */
 export default function WindTurbines({ wind = 2 }) {
-  const spots = useMemo(() => pickTurbineSpots(10), [])
+  const spots = useMemo(() => pickTurbineSpots(), [])
   const rotors = useRef([])
   const spinRef = useRef(0) // 当前实际角速度，逐帧向目标值靠拢
 

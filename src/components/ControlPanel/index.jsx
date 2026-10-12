@@ -9,7 +9,9 @@ export default function ControlPanel({
   weather,
   onWeatherChange,
   wind,
-  onWindChange
+  onWindChange,
+  buildingLight,
+  onBuildingLightChange
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -55,15 +57,34 @@ export default function ControlPanel({
           <input
             className="panel__slider"
             type="range"
+            aria-label="风力等级"
             min="0"
             max="10"
             step="0.1"
             value={wind}
             onChange={(e) => onWindChange(Number(e.target.value))}
           />
-          <div className="panel__wind-value">
+          <div className="panel__slider-value">
             <span>{(wind ?? 0).toFixed(1)} 级</span>
             <span>{getWindLabel(wind)}</span>
+          </div>
+        </section>
+
+        <section className="panel__section">
+          <h3 className="panel__label">楼宇灯光</h3>
+          <input
+            className="panel__slider"
+            type="range"
+            aria-label="楼宇灯光亮度"
+            min="0"
+            max="200"
+            step="5"
+            value={Math.round(buildingLight * 100)}
+            onChange={(e) => onBuildingLightChange(Number(e.target.value) / 100)}
+          />
+          <div className="panel__slider-value">
+            <span>亮度</span>
+            <span>{Math.round(buildingLight * 100)}%</span>
           </div>
         </section>
 

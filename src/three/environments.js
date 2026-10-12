@@ -1,3 +1,5 @@
+import { GROUND_SIZE } from './cityLayout'
+
 // ============================================================
 //  环境预设：白天 / 黑夜
 //  切换时由 Scene 里的 DayNightRig 做平滑插值过渡
@@ -19,7 +21,7 @@ export const ENVIRONMENTS = {
     // 雾：颜色 = 天空盒地平线色（远处地形会自然融进天际线，而不是被洗白）；
     // near 推得很远，保证城区和山脊清晰，只有最远端才有一点点大气感。
     // 城区放大到 200×200 后，雾距同比例外推，否则城区会被雾洗淡。
-    fog: { color: '#cfe2f5', near: 240, far: 700 },
+    fog: { color: '#cfe2f5', near: GROUND_SIZE * 1.4, far: GROUND_SIZE * 3.5 },
     // 天空盒调色板（6 面立方体贴图，由 three/skybox.js 绘制）
     sky: {
       zenith: '#2f6ec9',
@@ -48,13 +50,13 @@ export const ENVIRONMENTS = {
     // 环境贴图强度
     envIntensity: 1.15,
     // 地面（反射 / 粗糙度）
-    ground: { roughness: 0.58, metalness: 0.32, mirror: 0.32 }
+    ground: { roughness: 0.86, metalness: 0.04, mirror: 0.08 }
   },
   night: {
     key: 'night',
     label: '黑夜',
     background: '#0a0d13',
-    fog: { color: '#17273c', near: 180, far: 580 },
+    fog: { color: '#17273c', near: GROUND_SIZE * 1.1, far: GROUND_SIZE * 3 },
     sky: {
       zenith: '#04070e',
       horizon: '#17273c',
@@ -79,7 +81,7 @@ export const ENVIRONMENTS = {
     key: { intensity: 1.7, color: '#dfe8ff' },
     rim: { intensity: 34, color: '#22d3ee' },
     envIntensity: 0.6,
-    ground: { roughness: 0.78, metalness: 0.5, mirror: 0.55 }
+    ground: { roughness: 0.9, metalness: 0.05, mirror: 0.08 }
   }
 }
 

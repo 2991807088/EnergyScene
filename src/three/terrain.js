@@ -1,6 +1,6 @@
 // ============================================================
 //  城郊地形
-//  - 城区（地面 200×200 的方形范围）保持水平，不改动城市
+//  - 城区范围由 cityLayout 定义，城市地面保持水平
 //  - 只有「一条扇区」成山（连绵山脊），扇区外是低缓起伏的平原
 //  - 高度场是纯函数 terrainHeight(x, z)，地形网格与风机落位共用同一份，
 //    保证风机一定踩在地面上，不会悬空或陷进山里
@@ -8,10 +8,10 @@
 //    「太阳比山/风机还低」这种看着不合理的画面
 // ============================================================
 import * as THREE from 'three'
-import { mulberry32 } from './cityLayout'
+import { CITY_HALF, mulberry32 } from './cityLayout'
 
-export const TERRAIN_HALF = 300 // 地形平面半边长（600×600）
-export const TERRAIN_SEGMENTS = 300 // 网格段数 → 每格 2 单位（与旧版一致，保证树根贴地精度不退化）
+export const TERRAIN_HALF = 450
+export const TERRAIN_SEGMENTS = 450 // 保持每格 2 单位的地形精度
 
 /** 山脊带中心方位（与默认视线、太阳方位同向 → 山在正前方当背景） */
 export const RANGE_AZIMUTH = -2.266
@@ -22,10 +22,9 @@ const PLAIN_HEIGHT = 4 // 扇区外的低缓起伏（明确「不是山」）
 export const PEAK_HEIGHT = 24 // 山脊基准高度（受形状系数影响，实际最高约 31）
 export const SNOW_LINE = 17 // 雪线
 
-const CITY_HALF = 101 // 城区方形半边（地面半边 100 + 1 余量）
 const APRON_FADE = 32 // 出城多远后完全解除压制
-const RISE_START = 130 // 开始起坡的半径
-const RISE_END = 200 // 达到全高的半径
+const RISE_START = CITY_HALF + 30
+const RISE_END = CITY_HALF + 100
 
 const MAX_TIP_ELEVATION = (13 * Math.PI) / 180 // 风机叶尖的仰角上限
 
@@ -167,19 +166,14 @@ export function generateTerrain() {
   return geo
 }
 
-/**
- * 挑一批适合立风机的位置。
- * 只在山脊扇区内取样，并逐点校验「叶尖仰角 < 13°」——
- * 否则风机看着会比太阳还高。俯仰角约束写在这里，比写死高度更可靠。
- */
-export function pickTurbineSpots(count = 10, seed = 777) {
+/** 在山脊扇区内分散布置风机，保持足够间距。 */
+export function pickTurbineSpots(count = 48, seed = 777) {
   const rand = mulberry32(seed)
   const spots = []
-  let guard = 0
-
-  while (spots.length < count && guard++ < 8000) {
+  let attempts = 0
+  while (spots.length < count && attempts++ < 8000) {
     const angle = RANGE_AZIMUTH + (rand() - 0.5) * 2 * RANGE_CORE
-    const radius = 165 + rand() * 80 // 165 ~ 245（城区放大后，山脊整体外移）
+    const radius = CITY_HALF + 75 + rand() * 120
     const x = Math.cos(angle) * radius
     const z = Math.sin(angle) * radius
     const h = terrainHeight(x, z)
@@ -188,9 +182,9 @@ export function pickTurbineSpots(count = 10, seed = 777) {
     const bladeLen = 4 + rand() * 1.6
     const total = towerH + bladeLen
 
-    if (h < 6) continue // 谷地不要，只要山脊
+    if (h < 6) continue // 谷地不放风机
     if (Math.atan2(h + total, radius) > MAX_TIP_ELEVATION) continue // 别高过太阳
-    if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 24)) continue // 别挤在一起
+    if (spots.some((spot) => Math.hypot(spot.x - x, spot.z - z) < 22)) continue
 
     spots.push({
       x,

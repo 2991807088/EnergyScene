@@ -6,6 +6,9 @@ import {
   ROAD_MIN,
   ROAD_MAX,
   ROAD_LINES,
+  CORE_ROAD_LINES,
+  ROAD_WIDTH,
+  ASPHALT,
   mulberry32
 } from '@/three/cityLayout'
 import { signalAt } from '@/three/traffic'
@@ -20,13 +23,13 @@ const JUNCTIONS_X = ROAD_LINES.map((n) => verticalRoadX(n))
 const JUNCTIONS_Z = ROAD_LINES.map((n) => horizontalRoadZ(n))
 
 /** 停止线距路口中心的距离 */
-const STOP_DIST = 1.8
+const STOP_DIST = ROAD_WIDTH / 2 + 2.4
 
 /** 车道中心距道路中心线的横向偏移（右侧通行） */
-const LANE_OFF = 0.68
+const LANE_OFF = ASPHALT / 4
 
 /** 跑车的道路（网格线序号）—— 正好是中心广场四角那四条 */
-const LANE_LINES = [5, 7]
+const LANE_LINES = CORE_ROAD_LINES
 
 const CAR_COLORS = [
   '#e2483d',

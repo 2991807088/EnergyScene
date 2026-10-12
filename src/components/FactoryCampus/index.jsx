@@ -4,7 +4,8 @@ import {
   buildFactoryCampus,
   campusUnitBox,
   campusPanelMaterial,
-  CAMPUS
+  CAMPUS,
+  CAMPUS_OFFSET
 } from '@/three/factoryCampus'
 import { SOLAR_TABLE } from '@/three/solarFarm'
 
@@ -44,7 +45,7 @@ export default function FactoryCampus() {
   }, [panels])
 
   return (
-    <group>
+    <group position={[CAMPUS_OFFSET.x, 0, CAMPUS_OFFSET.z]}>
       {boxes.map((b, i) => (
         <mesh
           key={`b${i}`}

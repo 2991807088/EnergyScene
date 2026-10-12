@@ -5,8 +5,9 @@
 //  - 落位走 cityLayout 的街区中心，与道路网格严格对齐（横平竖直）
 // ============================================================
 import * as THREE from 'three'
-import { blockCenterX, blockCenterZ, mulberry32 } from './cityLayout'
+import { GRID_N, blockCenterX, blockCenterZ, isParkBlock, mulberry32 } from './cityLayout'
 import { isInsideCampus } from './factoryCampus'
+import { isInsideChargingStation } from './chargingStation'
 
 export const TYPE = {
   RESIDENTIAL: 'residential',
@@ -29,6 +30,10 @@ function makeFacade({ rand, cols, rows, wall, win, lit, litRate }) {
   c.width = W
   c.height = H
   const ctx = c.getContext('2d')
+  const glow = document.createElement('canvas')
+  glow.width = W
+  glow.height = H
+  const glowCtx = glow.getContext('2d')
 
   ctx.fillStyle = wall
   ctx.fillRect(0, 0, W, H)
@@ -39,22 +44,30 @@ function makeFacade({ rand, cols, rows, wall, win, lit, litRate }) {
     for (let i = 0; i < cols; i++) {
       const on = rand() < litRate
       ctx.fillStyle = on ? lit[Math.floor(rand() * lit.length)] : win
-      ctx.fillRect(i * cw + cw * 0.2, r * ch + ch * 0.26, cw * 0.6, ch * 0.46)
+      const x = i * cw + cw * 0.2
+      const y = r * ch + ch * 0.26
+      ctx.fillRect(x, y, cw * 0.6, ch * 0.46)
+      if (on) {
+        glowCtx.fillStyle = ctx.fillStyle
+        glowCtx.fillRect(x, y, cw * 0.6, ch * 0.46)
+      }
     }
   }
 
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = THREE.RepeatWrapping
-  tex.wrapT = THREE.RepeatWrapping
-  return tex
+  return [c, glow].map((canvas) => {
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    return tex
+  })
 }
 
-/** 墙身：窗户贴图同时当自发光贴图，夜景窗户自己亮 */
-function wallMaterial(tex, emissiveIntensity, roughness, metalness) {
+/** 墙身：只让点亮的窗户自发光 */
+function wallMaterial([map, emissiveMap], emissiveIntensity, roughness, metalness) {
   return new THREE.MeshStandardMaterial({
-    map: tex,
-    emissiveMap: tex,
+    map,
+    emissiveMap,
     emissive: new THREE.Color('#ffffff'),
     emissiveIntensity,
     roughness,
@@ -78,7 +91,7 @@ function boxFaces(wall, roof) {
 function addResidential({ add, rand, mats, detailMat, bx, bz, inCbd }) {
   const mat = mats[Math.floor(rand() * mats.length)]
   const units = rand() < 0.42 ? 2 : 1
-  const gap = 5.4
+  const gap = 5
 
   for (let u = 0; u < units; u++) {
     const offset = units === 1 ? 0 : (u - 0.5) * gap
@@ -109,7 +122,7 @@ function addFactory({ add, rand, mats, chimneyMat, bx, bz }) {
   const sheds = rand() < 0.55 ? 2 : 1
 
   for (let s = 0; s < sheds; s++) {
-    const offset = sheds === 1 ? 0 : (s - 0.5) * 5.2
+    const offset = sheds === 1 ? 0 : (s - 0.5) * 5
     const w = sheds === 1 ? 8.2 + rand() * 1.6 : 4.4 + rand() * 0.8
     const h = 3.0 + rand() * 1.4
     const d = 5.8 + rand() * 2.0
@@ -189,7 +202,7 @@ export function generateCity(seed = 20261012) {
   const add = (geoKey, material, position, scale) => meshes.push({ geoKey, material, position, scale })
   const noop = () => {}
 
-  const BLOCKS = 12 // 每轴 12 个街区（n = 0..11）
+  const BLOCKS = GRID_N
 
   for (let n = 0; n < BLOCKS; n++) {
     for (let m = 0; m < BLOCKS; m++) {
@@ -197,13 +210,13 @@ export function generateCity(seed = 20261012) {
       const bz = blockCenterZ(m)
       const radius = Math.max(Math.abs(bx), Math.abs(bz))
 
-      if (radius < 15) continue // 中心广场（树阵）
+      if (isParkBlock(bx, bz)) continue
       if (rand() < SKIP_RATE) continue // 留空
 
-      // 厂房园区占用的街区不盖楼。
+      // 厂房园区 / 储能充电站占用的街区不盖楼。
       // 注意这里**不能**提前 continue：那会把随机流往前挪，整座城市后面的楼全变位置。
-      // 照常跑完生成器、只把输出丢掉，这样园区之外的城市与之前逐字节一致。
-      const sink = isInsideCampus(bx, bz) ? noop : add
+      // 照常跑完生成器、只把输出丢掉，这样两处场地之外的城市与之前逐字节一致。
+      const sink = isInsideCampus(bx, bz) || isInsideChargingStation(bx, bz) ? noop : add
 
       const inCbd = radius <= CBD_RADIUS
       const roll = rand()
@@ -225,5 +238,10 @@ export function generateCity(seed = 20261012) {
     }
   }
 
-  return { meshes, geometries }
+  const lightMaterials = [...residentialMats, ...mallMats, ...factoryMats]
+    .map((faces) => faces[0])
+    .concat(signMat)
+    .map((material) => ({ material, baseIntensity: material.emissiveIntensity }))
+
+  return { meshes, geometries, lightMaterials }
 }

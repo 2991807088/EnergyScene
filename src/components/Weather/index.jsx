@@ -1,10 +1,11 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { GROUND_SIZE } from '@/three/cityLayout'
 
 // 粒子分布范围。城区从 120×120 放大到 200×200 后同步外扩，
 // 否则拉远看全城时，雨雪只盖住中间一小块。
-const AREA = 100 // 粒子分布的平面范围
+const AREA = GROUND_SIZE + 40
 const HEIGHT = 44 // 粒子分布的高度
 
 /** 雨丝贴图：一条上下淡出的竖线 */

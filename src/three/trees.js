@@ -8,8 +8,9 @@
 //  - 输出「实例批次」：一个批次一个 InstancedMesh，几百棵树只要十几次 draw call
 // ============================================================
 import * as THREE from 'three'
-import { mulberry32 } from './cityLayout'
+import { CITY_HALF, PARK_AREAS, mulberry32 } from './cityLayout'
 import { terrainHeight, TERRAIN_HALF, TERRAIN_SEGMENTS } from './terrain'
+import { isInsideEnergyGrid } from './substation'
 import { isInsideSolarFarm } from './solarFarm'
 
 // ---------- 共享材质（颜色交给 instanceColor） ----------
@@ -94,7 +95,6 @@ function pickWildSpecies(rand) {
 
 // ---------- 布点 ----------
 
-const CITY_HALF = 101 // 与 terrain.js 一致：城区方形半边
 const TREELINE = 13 // 雪线以下才长树
 const MAX_SLOPE = 0.55 // 坡度上限，太陡不长树（也避免根部悬空）
 const GROUND_SINK = 0.12 // 往下埋一点，保证「种」在地里而不是浮在地表
@@ -177,7 +177,7 @@ export function pickTreeSpots(seed = 20261013) {
   //   针叶树 0.1721×6.4 = 1.101、阔叶树 0.3016×5.2 = 1.568，
   //   留出的余量 2.0 − 1.568 = 0.432，树冠不会伸到马路上；
   //   同时刻意避开 0 和 ±16 这两组路中线。
-  const CENTRAL_OFFSETS = [5.0, 8.6, 12.2]
+  const CENTRAL_OFFSETS = [4, 7, 10]
   for (const ox of CENTRAL_OFFSETS) {
     for (const oz of CENTRAL_OFFSETS) {
       for (const sx of [-1, 1]) {
@@ -190,10 +190,19 @@ export function pickTreeSpots(seed = 20261013) {
   }
 
   // ---- 2) 环城林带：先撒"树丛中心"再成团，比均匀撒点自然 ----
-  const GROVES = 88
+  for (const park of PARK_AREAS) {
+    for (let i = 0; i < 28; i++) {
+      const x = park.minX + 4 + rand() * (park.maxX - park.minX - 8)
+      const z = park.minZ + 4 + rand() * (park.maxZ - park.minZ - 8)
+      if (Math.abs(x - (park.minX + park.maxX) / 2) < 2 || Math.abs(z - (park.minZ + park.maxZ) / 2) < 2) continue
+      trees.push(makeTree(rand, pickWildSpecies(rand), x, z, -GROUND_SINK))
+    }
+  }
+
+  const GROVES = 120
   for (let g = 0; g < GROVES; g++) {
     const angle = rand() * Math.PI * 2
-    const radius = 108 + rand() * 125 // 108 ~ 233，正好从城边一直铺到山脚
+    const radius = CITY_HALF + 8 + rand() * 150
     const cx = Math.cos(angle) * radius
     const cz = Math.sin(angle) * radius
     const count = 3 + Math.floor(rand() * 5) // 每丛 3~7 棵
@@ -212,6 +221,7 @@ export function pickTreeSpots(seed = 20261013) {
       // 判定必须放在 makeTree 之后：makeTree 自己会消耗 8 个随机数，
       // 提前 continue 会把整条随机流推移，后面几十棵树会全部换位置。
       if (isInsideSolarFarm(tree.x, tree.z)) continue
+      if (isInsideEnergyGrid(tree.x, tree.z)) continue
       trees.push(tree)
     }
   }

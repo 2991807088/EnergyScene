@@ -7,11 +7,12 @@ export default function App() {
   const [timeOfDay, setTimeOfDay] = useState('day')
   const [weather, setWeather] = useState('clear')
   const [wind, setWind] = useState(2)
+  const [buildingLight, setBuildingLight] = useState(1)
 
   return (
     <div className="app">
       <main className="app__body">
-        <Scene mode={timeOfDay} weather={weather} wind={wind} />
+        <Scene mode={timeOfDay} weather={weather} wind={wind} buildingLight={buildingLight} />
         <ControlPanel
           timeOfDay={timeOfDay}
           onTimeOfDayChange={setTimeOfDay}
@@ -19,6 +20,8 @@ export default function App() {
           onWeatherChange={setWeather}
           wind={wind}
           onWindChange={setWind}
+          buildingLight={buildingLight}
+          onBuildingLightChange={setBuildingLight}
         />
       </main>
     </div>

@@ -20,9 +20,11 @@
 //    · 面板几何 / 材质直接复用地面电站的（three/solarFarm.js），保证两处光伏观感一致
 // ============================================================
 import * as THREE from 'three'
+import { CITY_EXPANSION } from './cityLayout'
 import { SOLAR_MATERIALS, SOLAR_PANEL_TINT, SOLAR_TABLE } from './solarFarm'
 
 const DEG = Math.PI / 180
+export const CAMPUS_OFFSET = { x: -CITY_EXPANSION, z: CITY_EXPANSION }
 
 /** 园区（围栏）范围与厂房阵列参数 */
 export const CAMPUS = {
@@ -55,6 +57,8 @@ export const CAMPUS = {
 
 /** 围栏矩形内（可带外扩余量）—— 供建筑 / 树木避让 */
 export function isInsideCampus(x, z, margin = 0) {
+  x -= CAMPUS_OFFSET.x
+  z -= CAMPUS_OFFSET.z
   return (
     x >= CAMPUS.minX - margin &&
     x <= CAMPUS.maxX + margin &&

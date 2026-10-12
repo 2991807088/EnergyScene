@@ -12,12 +12,9 @@ const LEG_GEO = new THREE.CylinderGeometry(
 )
 
 /**
- * 光伏电站。目前两片，合并成同一组 InstancedMesh：
+ * 城市 +z 边的大型光伏电站，宽度与城市地面一致。
  *
- * - 小阵列：位置来自用户截图里红箭头尖端的反投影（见 three/solarFarm.js 顶部注释）
- * - 城市 +z 边电站：位置来自用户第二张俯视截图里红框的单应反解，宽度 = 城市宽度
- *
- * - 面板一律朝太阳倾斜（小阵列朝向由 SUN_DIRECTION 推出，不写死方位）
+ * - 面板朝 -z 倾斜，行列与城市网格对齐
  * - 面板颜色走 instanceColor，材质只有一份
  * - 面板 + 立柱 = 2 次 draw call 画完整片电站
  */

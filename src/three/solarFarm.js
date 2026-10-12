@@ -1,44 +1,10 @@
-// ============================================================
-//  光伏电站：选址 / 朝向 / 支架布置
-//
-//  两片阵列，共用同一套支架尺寸与材质：
-//
-//  1) 小阵列 SOLAR_FARM_CENTER (172.44, 175.92)
-//     —— 用户截图里红箭头尖端的反投影。相机位姿由城市轮廓拟合得到
-//        （逐行左右边界残差 ~4px / 1920px），再用射线与真实地形高度场求交。
-//
-//  2) 城市 +z 边的大型电站 FARM_EDGE (0, 145)
-//     —— 用户第二张俯视截图里红框的位置。红框是画在城市"远端边"上的一个矩形，
-//        把该截图的相机反解一遍（城市四条边线求交得四角 → 单应 → 8 种角点对应里
-//        用已知的小阵列世界坐标挑出正确的那一组，误差 10.7 世界单位）后确认：
-//        红框贴着的正是世界 z = +100 这条边，横向覆盖 x ∈ [-100, 100]，
-//        向外延伸约 90。于是这片电站按「宽度 = 城市宽度 200」建成；
-//        朝向取 yaw = π（行列对齐城市网格），面板往 -z 斜 —— 太阳水平方位
-//        (-0.638, -0.770) 的 z 分量就在 -z 侧，倾角不会被白斜。
-//        该方位离山脊带中心（RANGE_AZIMUTH ≈ -129.8°，跨度 ±77°）还有 140°，
-//        地形只有 PLAIN_HEIGHT 级的低缓起伏，不会贴到山。
-//
-//  不写死朝向：小阵列局部 +z 指向太阳水平方位（φ = π/2 − 太阳方位），
-//  以后改太阳方向，阵列会自己跟着转。
-//
-//  落地规则（两片阵列同一条规则，坡地上才不会出洋相）：
-//  - 支架基准面 = 该支架「占地 3×3 采样点里的最高地面」。面板是刚性的、
-//    悬在地面之上，基准取最高才能保证整块板都不入土；只按中心点取高度的话，
-//    坡地上翘起那一侧的板角会扎进土里（城边这块地最陡 18%，实测能埋 0.5）。
-//  - 立柱顶端挂在支架基准面上（低于面板背面 legTopDrop，不会捅穿面板），
-//    柱脚落到「立柱自己那点的地面」以下 legSink —— 柱长逐根算，
-//    坡地上既不悬空，也不会为了够地面而顶穿面板。
-//
-//  输出实例矩阵：整片电站只要 2 次 draw call（面板 + 立柱）。
-// ============================================================
+// 城市 +z 边的大型光伏电站：宽度随城区变化、深度 90，面板朝 -z 倾斜。
+// 支架基准取占地采样的最高地面，柱脚独立贴地；面板和立柱采用实例渲染。
 import * as THREE from 'three'
 import { terrainHeight } from './terrain'
-import { SUN_DIRECTION } from './environments'
+import { GROUND_SIZE } from './cityLayout'
 
 const DEG = Math.PI / 180
-
-/** 小阵列中心（世界 XZ）—— 红箭头尖端与地形求交的结果 */
-export const SOLAR_FARM_CENTER = { x: 172.44, z: 175.92 }
 
 /** 单张支架（一组面板）的尺寸，单位与场景一致（≈ 米） */
 export const SOLAR_TABLE = {
@@ -64,19 +30,6 @@ const TABLE_HALF_Z =
 /** 占地 3×3 采样点（阵列局部坐标，单位是「半尺寸的倍数」），取地面最高点用 */
 const FOOT_GRID = [-1, 0, 1]
 
-/**
- * 太阳水平方位（rad）。
- * 小阵列局部 +z 指向它 → 面板法线自然朝太阳倾斜。
- * 这里推出 -129.8°，与地形里的 RANGE_AZIMUTH（山脊带中心）同向。
- */
-const SUN_AZIMUTH = Math.atan2(SUN_DIRECTION[2], SUN_DIRECTION[0])
-
-/**
- * 小阵列朝向：Y 轴旋转把局部 (0,0,1) 映到 (sinφ, 0, cosφ)。
- * 令它等于太阳水平方向 (cos az, 0, sin az)，解得 φ = π/2 − az。
- */
-export const SOLAR_FARM_YAW = Math.PI / 2 - SUN_AZIMUTH
-
 // ---------- 单片阵列的配置 ----------
 
 /**
@@ -88,35 +41,23 @@ export const SOLAR_FARM_YAW = Math.PI / 2 - SUN_AZIMUTH
  * @property {number} cols     每排支架数（沿阵列局部 +x）
  * @property {number} rowPitch 排间距
  * @property {number} colPitch 同排相邻支架间距
- * @property {number} salt     面板色调抖动用的盐，避免两片阵列的冷暖完全一样
+ * @property {number} salt     面板色调抖动的随机偏移
  */
 
-/** 1) 小阵列 —— 逐位保持原样（尺寸、格数、随机盐都没动） */
-const FARM_SMALL = {
-  cx: SOLAR_FARM_CENTER.x,
-  cz: SOLAR_FARM_CENTER.z,
-  yaw: SOLAR_FARM_YAW,
-  rows: 7,
-  cols: 11,
-  rowPitch: 5.6,
-  colPitch: 5.8,
-  salt: 0
-}
-
-/** 2) 城市 +z 边的大型电站 —— 宽度锁死等于城市宽度 */
-const EDGE_WIDTH = 200 // 与城市地面同宽
+/** 城市 +z 边的大型电站，宽度与城市地面一致。 */
+const EDGE_WIDTH = GROUND_SIZE
 const EDGE_DEPTH = 90 // 从城边往 +z 铺出去多深
 const EDGE_GAP = 1 // 与城市地面边留 1 的缝，免得和地面边线糊在一起
-const EDGE_COLS = 34
+const EDGE_COLS = Math.round(EDGE_WIDTH / 5.8)
 const EDGE_ROWS = 16
-// 间距由「跨度」反算，保证最外侧支架的外缘正好落在 x = ±100
+// 间距由跨度反算，让最外侧支架与城区两侧边界对齐。
 const EDGE_COL_PITCH = (EDGE_WIDTH - SOLAR_TABLE.width) / (EDGE_COLS - 1)
 // 一张支架沿 z 的占地 = 斜面在水平面的投影
 const EDGE_ROW_PITCH = (EDGE_DEPTH - TABLE_HALF_Z * 2) / (EDGE_ROWS - 1)
 
 const FARM_EDGE = {
   cx: 0,
-  cz: 100 + EDGE_GAP + EDGE_DEPTH / 2, // 近端贴城边，往 +z 铺 EDGE_DEPTH
+  cz: GROUND_SIZE / 2 + EDGE_GAP + EDGE_DEPTH / 2,
   yaw: Math.PI, // 行列对齐城市网格；面板往 -z 斜（太阳的 z 分量在 -z 侧）
   rows: EDGE_ROWS,
   cols: EDGE_COLS,
@@ -125,15 +66,14 @@ const FARM_EDGE = {
   salt: 1
 }
 
-/** 全部阵列，顺序固定：小阵列在前，保证它的实例下标不变 */
-const FARM_CONFIGS = [FARM_SMALL, FARM_EDGE]
+const FARM_CONFIGS = [FARM_EDGE]
 
 /** 城市 +z 电站的占地（世界 XZ），供校验与调试 */
 export const EDGE_FARM_SPAN = {
   x: EDGE_WIDTH,
   z: EDGE_DEPTH,
-  nearZ: 100 + EDGE_GAP,
-  farZ: 100 + EDGE_GAP + EDGE_DEPTH,
+  nearZ: GROUND_SIZE / 2 + EDGE_GAP,
+  farZ: GROUND_SIZE / 2 + EDGE_GAP + EDGE_DEPTH,
   depth: EDGE_DEPTH
 }
 
@@ -161,11 +101,6 @@ function toLocal(cfg, x, z) {
   return { x: dx * c - dz * s, z: dx * s + dz * c }
 }
 
-/** 世界坐标 → 小阵列局部坐标（R_y(yaw) 的逆） */
-export function toFarmLocal(x, z) {
-  return toLocal(FARM_SMALL, x, z)
-}
-
 /**
  * 该点是否落在任意一片阵列占地内。
  * 林带撒点会用它避让 —— 否则会有树从面板中间长出来。
@@ -177,9 +112,6 @@ export function isInsideSolarFarm(x, z, margin = 0) {
   }
   return false
 }
-
-/** 小阵列占地（世界 XZ 的半尺寸，供调试与校验用） */
-export const SOLAR_FARM_FOOTPRINT = { halfX: FARM_SMALL.halfX, halfZ: FARM_SMALL.halfZ }
 
 // ---------- 材质 ----------
 // 面板材质是白的，颜色一律走 instanceColor（和树木一个套路）：
@@ -254,7 +186,7 @@ function layoutFarms(configs) {
       .multiplyMatrices(yawM, panelLift)
       .multiply(tiltM)
       .multiply(panelScale)
-    // 色调的盐错开，免得两片阵列前几十张板颜色完全撞上
+    // 固定色调偏移，保证刷新后组件颜色一致。
     const saltLum = 7 + cfg.salt * 1009
     const saltWarm = 11 + cfg.salt * 1009
 
@@ -312,17 +244,12 @@ function layoutFarms(configs) {
   return { panelMatrices, legMatrices, tones, panelCount, legCount, tables }
 }
 
-/** 小阵列（原样，供校验/复用） */
-export function layoutSolarFarm() {
-  return layoutFarms([FARM_SMALL])
-}
-
 /** 城市 +z 边的大型电站 */
 export function layoutEdgeFarm() {
   return layoutFarms([FARM_EDGE])
 }
 
-/** 全部阵列合并成一份实例数据 —— 组件只用这一个，2 次 draw call 画完两片 */
+/** 大型电站的实例数据，组件以两次 draw call 渲染面板与立柱。 */
 export function layoutAllFarms() {
   return layoutFarms(FARM_CONFIGS)
 }

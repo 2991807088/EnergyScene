@@ -8,15 +8,14 @@ const lerp = (a, b, t) => a + (b - a) * t
 
 /**
  * 城市地面：
- * - 程序化城市俯瞰纹理（街道网格 + 标线 + 人行道），**一张不重复的大图 1:1 铺满**
- *   （不用小 tile 平铺：街区边长 16、地面 200，200/16 = 12.5 不是整数，平铺接缝必然错位）
- * - MeshReflectorMaterial 实时镜面反射，做出微湿柏油质感
+ * - 分层道路、标线、人行道与绿地，一张不重复的纹理覆盖城区
+ * - 天气控制路面粗糙度和反射，晴天干燥、雨天湿润
  * - appearance（粗糙度 / 金属度 / 反射强度）随昼夜环境平滑过渡
  */
 export default function CityGround({ appearance }) {
   const matRef = useRef()
 
-  const map = useMemo(() => createCityTexture(2048), [])
+  const map = useMemo(() => createCityTexture(4096), [])
 
   useFrame((_, dt) => {
     const m = matRef.current
@@ -24,6 +23,7 @@ export default function CityGround({ appearance }) {
     const k = 1 - Math.exp(-6 * dt)
     m.roughness = lerp(m.roughness, appearance.roughness, k)
     m.metalness = lerp(m.metalness, appearance.metalness, k)
+    m.mixStrength = lerp(m.mixStrength, appearance.mirror, k)
     if (typeof m.mirror === 'number') {
       m.mirror = lerp(m.mirror, appearance.mirror, k)
     }
@@ -36,15 +36,15 @@ export default function CityGround({ appearance }) {
         ref={matRef}
         map={map}
         resolution={1024}
-        mixBlur={8}
-        mixStrength={1.2}
+        mixBlur={1}
+        mixStrength={0.08}
         blur={[300, 100]}
-        roughness={0.78}
+        roughness={0.86}
         depthScale={1.1}
         minDepthThreshold={0.4}
         maxDepthThreshold={1.4}
-        metalness={0.5}
-        mirror={0.55}
+        metalness={0.04}
+        mirror={0.08}
         color="#ffffff"
       />
     </mesh>
