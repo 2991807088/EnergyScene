@@ -23,9 +23,10 @@
 //    · 北侧   一排 6 台储能集装箱（BESS）
 //    · 中部   光伏顶棚（56×30，柱高 5.8），棚顶密铺双玻组件
 //    · 棚下   两排共 24 个充电车位，中间 16 宽的通行车道，每车位一台充电桩
-//    · 车辆   10 台电动车停在车位里充电（车头朝通道，车身带充电指示灯）
+//    · 车辆   12 台电动车停在车位里充电（车头朝通道，车身带充电指示灯，充电线接桩）
 //    · 南侧   管理/配电房
-//    · 出入口 开在西侧 x = minX（正对 x = 16 的中心干道），全场唯一
+//    · 出入口 开在西侧 x = minX（正对 x = 16 的中心干道），全场唯一；
+//             门楣挂「新能源超级充电站」招牌（正反两面，见组件内 StationSign）
 //
 //  与其它模块的关系：
 //    · 建筑（buildings.js）要避让本站，见 isInsideChargingStation()
@@ -101,6 +102,9 @@ export const CHARGING = {
 /** 三排车位的中心 z（0 排露天、1/2 排棚下） */
 export const CHARGING_BAY_Z = CHARGING.bay.rowCenterZ
 
+/** 站名（大门门楣招牌） */
+export const CHARGING_STATION_NAME = '新能源超级充电站'
+
 /** 围栏矩形内（可带外扩余量）—— 供建筑 / 树木避让 */
 export function isInsideChargingStation(x, z, margin = 0) {
   x -= CHARGING_OFFSET.x
@@ -117,6 +121,28 @@ export function isInsideChargingStation(x, z, margin = 0) {
 export const CHARGING_CENTER = {
   x: (CHARGING.minX + CHARGING.maxX) / 2,
   z: (CHARGING.minZ + CHARGING.maxZ) / 2
+}
+
+/**
+ * 某个车位的充电线走线：从充电桩枪座出口垂到车头充电口，中段自然下垂。
+ * row / i 为车位下标（与 buildChargingStation 里 carPlan 同一套坐标）。
+ * 驶入车辆停在 (2, 0) 号位，组件侧复用同一函数保证两条线走线一致。
+ */
+export function chargingCable(row, i) {
+  const Y = CHARGING.bay
+  const rz = Y.rowCenterZ[row]
+  const sgn = Y.rowHead[row] // 车头朝向，充电桩在同侧
+  const px = Y.x0 + (i + 0.5) * Y.w
+  const pz = rz + sgn * (Y.d / 2 + 0.55) // 充电桩中心
+  const head = rz + sgn * (CHARGING.car.len / 2) // 车头平面
+  return {
+    start: [px, 1.05, pz + sgn * 0.33], // 枪座出口（桩靠通道一面）
+    control: [px, 0.32, pz - sgn * 0.62], // 下垂最低点
+    end: [px, 0.55, head + sgn * 0.2], // 枪头（没入车头充电口）
+    holster: [px, 1.08, pz + sgn * 0.26], // 桩上枪座
+    gun: [px, 0.55, head + sgn * 0.24], // 枪头盒
+    tip: [px, 0.55, head + sgn * 0.02] // 发光插头
+  }
 }
 
 // ---------- 纹理 ----------
@@ -183,6 +209,39 @@ function canvasTexture(canvas, repeatX, repeatY) {
   return t
 }
 
+const _signCache = new Map()
+/**
+ * 门楣站名招牌贴图：深绿底 + 亮绿描边 + 白色粗体，文字下方一条充电绿光带。
+ * 视觉语言与厂区墙面标牌 / 规划区招牌一致（深色底、亮描边、粗体白字）。
+ */
+export function stationSignTexture(name = CHARGING_STATION_NAME) {
+  if (_signCache.has(name)) return _signCache.get(name)
+  const canvas = document.createElement('canvas')
+  canvas.width = 1024
+  canvas.height = 160
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#10342a'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.strokeStyle = '#7fe0b0'
+  ctx.lineWidth = 7
+  ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10)
+  ctx.fillStyle = '#f2fbf6'
+  ctx.font = 'bold 100px "PingFang SC", "Microsoft YaHei", sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(name, canvas.width / 2, 68, canvas.width - 72)
+  // 文字下方一条充电绿光带
+  ctx.fillStyle = '#28c06a'
+  ctx.shadowColor = '#28c06a'
+  ctx.shadowBlur = 18
+  ctx.fillRect(canvas.width / 2 - 300, 124, 600, 10)
+  const map = new THREE.CanvasTexture(canvas)
+  map.colorSpace = THREE.SRGBColorSpace
+  map.anisotropy = 8
+  _signCache.set(name, map)
+  return map
+}
+
 let _cache = null
 function materials() {
   if (_cache) return _cache
@@ -220,9 +279,24 @@ function materials() {
     ledOn: new THREE.MeshStandardMaterial({
       color: '#1f7a45', roughness: 0.4, metalness: 0.1,
       emissive: new THREE.Color('#28c06a'), emissiveIntensity: 1.6
+    }),
+    // 充电线：深色线缆，带极淡的绿色自发光（夜里也看得出在补能）
+    cable: new THREE.MeshStandardMaterial({
+      color: '#20262c', roughness: 0.62, metalness: 0.12,
+      emissive: new THREE.Color('#0e3a24'), emissiveIntensity: 0.55
     })
   }
   return _cache
+}
+
+/** 组件侧要用的材质（枪头 / 指示灯 / 线缆）从这里取，避免各建一份 */
+export function chargingMaterials() {
+  return materials()
+}
+
+/** 充电线材质 */
+export function chargingCableMaterial() {
+  return materials().cable
 }
 
 /** 围栏材质：按段长算贴图重复 */
@@ -322,12 +396,15 @@ export function buildChargingStation() {
       box(M.charger, [px, 0.95, pz], [0.5, 1.54, 0.4])
       // 屏幕（自发光，朝通道）
       box(M.chargerScreen, [px, 1.35, pz + sgn * 0.22], [0.36, 0.44, 0.06])
+      // 枪座（充电线不用时插在桩上）
+      box(M.charger, [px, 1.08, pz + sgn * 0.26], [0.24, 0.34, 0.12])
       chargers.push({ x: px, z: pz, row: r })
     }
   })
 
   // ---- 5) 车辆：停在部分车位里充电 ----
   const cars = []
+  const cables = []
   const carPlan = [
     // 露天排（0）：多放几台，保证「在充电的新能源车」一眼能看见
     { row: 0, i: 0 }, { row: 0, i: 1 }, { row: 0, i: 3 }, { row: 0, i: 4 },
@@ -355,6 +432,11 @@ export function buildChargingStation() {
     }
     // 充电指示灯（车头侧，绿灯 = 正在补能）
     box(M.ledOn, [px, 0.86, rz + sgn * (CR.len / 2 - 0.08)], [0.34, 0.09, 0.05])
+    // 充电线：枪座 -> 车头充电口（枪头 + 发光插头 + 下垂线缆）
+    const cable = chargingCable(plan.row, plan.i)
+    box(M.charger, cable.gun, [0.18, 0.22, 0.3])
+    box(M.ledOn, cable.tip, [0.09, 0.09, 0.08])
+    cables.push(cable)
     cars.push({ x: px, z: rz, row: plan.row })
   })
 
@@ -383,13 +465,21 @@ export function buildChargingStation() {
   addFence(minX, (minZ + g0) / 2, g0 - minZ, true)
   addFence(minX, (g1 + maxZ) / 2, maxZ - g1, true)
 
-  // ---- 8) 大门：两根门柱 + 横梁 ----
+  // ---- 8) 大门：两根门柱 + 横梁 + 门楣站名招牌 ----
   box(M.steel, [minX, 1.6, g0], [0.9, 3.2, 0.9])
   box(M.steel, [minX, 1.6, g1], [0.9, 3.2, 0.9])
   box(M.steel, [minX, 3.34, g.z], [0.7, 0.42, g.width + 1.2])
-  // 门楣上的招牌板（浅色 + 自发光条，示意「光储充一体站」）
-  box(M.deck, [minX - 0.1, 3.9, g.z], [0.32, 0.72, g.width - 0.4])
-  box(M.chargerScreen, [minX - 0.28, 3.9, g.z], [0.06, 0.4, g.width - 1.6])
+  // 招牌背板（坐在横梁上，正反两面贴站名，贴图面见组件内 StationSign）
+  box(M.deck, [minX - 0.1, 4.55, g.z], [0.34, 2.0, g.width - 0.4])
+  // 上下挑檐
+  box(M.trim, [minX - 0.1, 5.63, g.z], [0.42, 0.16, g.width - 0.2])
+  box(M.trim, [minX - 0.1, 3.47, g.z], [0.42, 0.14, g.width - 0.2])
+  const SIGN_W = g.width - 1.2
+  const SIGN_H = (SIGN_W * 160) / 1024 // 与 canvas 1024x160 同比例
+  const sign = {
+    front: { position: [minX - 0.29, 4.55, g.z], rotationY: -Math.PI / 2, width: SIGN_W, height: SIGN_H },
+    back: { position: [minX + 0.09, 4.55, g.z], rotationY: Math.PI / 2, width: SIGN_W, height: SIGN_H }
+  }
 
   // ---- 9) 出入口铺装：从大门一直铺到马路边 ----
   box(M.asphalt, [minX - 1.1, 0.055, g.z], [2.6, 0.07, g.width])
@@ -399,7 +489,9 @@ export function buildChargingStation() {
     fence,
     panels: layoutCanopyPanels(),
     chargers,
-    cars
+    cars,
+    cables,
+    sign
   }
 }
 

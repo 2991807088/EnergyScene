@@ -9,7 +9,7 @@
 //    （Textures/*.png，gltf 内以相对路径引用），贴图浏览器只下载一次。
 //  - bakeBuildingModel 把 GLTF 场景烘成统一规格：
 //      底面 y=0、x/z 居中、缩放取「目标高度」与「最大占地」双约束的较小值，
-//      保证楼体不超街区（16m 格，含路缘余量按 13m 占地上限）。
+//      保证楼体不压到道路（16m 格扣除两侧路缘后，模型占地上限 9.2m）。
 //  - 窗光：FakeInterior 材质的 map 本身就是「亮灯内景/暗内景」贴图，
 //    直接用它做 emissiveMap —— 亮内景窗夜间发光，暗内景贴图本身近黑，
 //    发光后依然近黑，无需区分处理（强度由 Buildings 组件按 lightLevel 调）。
@@ -29,9 +29,9 @@ import * as THREE from 'three'
  *   Building_Small_1      12.5 × 17.0 × 14.5， 9.3k 三角
  */
 export const BUILDING_MODELS = {
-  quatLarge: { file: 'Building_Large_2', dir: 'quat', height: 24, footprint: 13 },
-  quatMedium: { file: 'Building_Medium_2_001', dir: 'quat', height: 21, footprint: 12.5 },
-  quatSmall: { file: 'Building_Small_1', dir: 'quat', height: 15, footprint: 11.5 }
+  quatLarge: { file: 'Building_Large_2', dir: 'quat', height: 24, footprint: 9.2 },
+  quatMedium: { file: 'Building_Medium_2_001', dir: 'quat', height: 21, footprint: 9.2 },
+  quatSmall: { file: 'Building_Small_1', dir: 'quat', height: 15, footprint: 9.2 }
 }
 
 export const BUILDING_MODEL_DIR = `${import.meta.env.BASE_URL}models/buildings`

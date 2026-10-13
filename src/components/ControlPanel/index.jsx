@@ -11,7 +11,9 @@ export default function ControlPanel({
   wind,
   onWindChange,
   buildingLight,
-  onBuildingLightChange
+  onBuildingLightChange,
+  turbineCount,
+  onTurbineCountChange
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -67,6 +69,24 @@ export default function ControlPanel({
           <div className="panel__slider-value">
             <span>{(wind ?? 0).toFixed(1)} 级</span>
             <span>{getWindLabel(wind)}</span>
+          </div>
+        </section>
+
+        <section className="panel__section">
+          <h3 className="panel__label">风机数量</h3>
+          <input
+            className="panel__slider"
+            type="range"
+            aria-label="风机数量"
+            min="0"
+            max="120"
+            step="4"
+            value={turbineCount}
+            onChange={(e) => onTurbineCountChange(Number(e.target.value))}
+          />
+          <div className="panel__slider-value">
+            <span>数量</span>
+            <span>{turbineCount} 台</span>
           </div>
         </section>
 

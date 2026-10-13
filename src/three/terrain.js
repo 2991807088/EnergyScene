@@ -9,6 +9,7 @@
 // ============================================================
 import * as THREE from 'three'
 import { CITY_HALF, EAST_SITES, mulberry32 } from './cityLayout'
+import { RIVER, riverCarve, riverContains, riverSample } from './river'
 
 export const TERRAIN_HALF = 500
 export const TERRAIN_SEGMENTS = 500 // 保持每格 2 单位的地形精度
@@ -93,7 +94,7 @@ const EAST_AREAS = [EAST_SITES.factoryNorth, EAST_SITES.factorySouth]
 
 export function terrainHeight(x, z) {
   const h = naturalHeight(x, z)
-  if (x < EAST_SITES.wind.minX - 14) return h
+  if (x < EAST_SITES.wind.minX - 14) return riverCarve(x, z, h)
   // 仅厂房用地需要平整；风机和光伏阵列直接落在自然低丘上。
   let distance = Infinity
   for (const site of EAST_AREAS) {
@@ -102,7 +103,7 @@ export function terrainHeight(x, z) {
       Math.max(site.minZ - z, 0, z - site.maxZ)
     ))
   }
-  return h * smoothstep(0, 14, distance)
+  return riverCarve(x, z, h * smoothstep(0, 14, distance))
 }
 
 /** 自然地形高度（未施加城北厂区平整） */
@@ -140,6 +141,9 @@ function naturalHeight(x, z) {
 const COLOR_LOW = new THREE.Color('#41503a')
 const COLOR_ROCK = new THREE.Color('#5b574d')
 const COLOR_SNOW = new THREE.Color('#dbe4ee')
+// 河道：水下泥沙 → 水边砾石（长江的河床与河滩）
+const COLOR_BED = new THREE.Color('#6f6a55')
+const COLOR_SHORE = new THREE.Color('#968f80')
 
 /**
  * 生成地形网格（顶点按高度场位移 + 按高度/坡度上色）。
@@ -174,6 +178,20 @@ export function generateTerrain() {
     // 陡坡露岩（雪也挂不住）
     c.lerp(COLOR_ROCK, clamp01(slope * 1.35) * 0.75)
 
+    // 长江河槽：水面以下是泥沙河床，水线附近是砾石河滩
+    const pz = pos.getZ(i)
+    if (pz >= RIVER.zFrom && pz <= RIVER.zTo) {
+      const { centerX, halfWidth, water } = riverSample(pz)
+      if (Math.abs(pos.getX(i) - centerX) < halfWidth * 1.55) {
+        const depth = water - h
+        if (depth > 0.12) {
+          c.lerp(COLOR_BED, clamp01(depth / 2.2))
+        } else {
+          c.lerp(COLOR_SHORE, clamp01(1 - (h - water) / 1.8))
+        }
+      }
+    }
+
     colors[i * 3] = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
@@ -200,6 +218,7 @@ export function pickTurbineSpots(count = 48, seed = 777) {
     const total = towerH + bladeLen
 
     if (h < 6) continue // 谷地不放风机
+    if (riverContains(x, z, 12)) continue // 河槽与河岸坡上不放风机
     if (Math.atan2(h + total, radius) > MAX_TIP_ELEVATION) continue // 别高过太阳
     if (spots.some((spot) => Math.hypot(spot.x - x, spot.z - z) < 22)) continue
 

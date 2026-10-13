@@ -12,6 +12,7 @@ import { CITY_HALF, CENTRAL_PARK, EAST_SITES, PARK_AREAS, inArea, isInsideTrack,
 import { terrainHeight, TERRAIN_HALF, TERRAIN_SEGMENTS } from './terrain'
 import { isInsideSolarFarm } from './solarFarm'
 import { POND, pondContains } from './pond'
+import { riverContains } from './river'
 
 // ---------- 共享材质（颜色交给 instanceColor） ----------
 export const TREE_MATERIALS = {
@@ -224,6 +225,8 @@ export function pickTreeSpots(seed = 20261013) {
       // 提前 continue 会把整条随机流推移，后面几十棵树会全部换位置。
       if (isInsideSolarFarm(tree.x, tree.z)) continue
       if (Object.values(EAST_SITES).some((site) => inArea(tree.x, tree.z, site, 7))) continue
+      // 长江水面与河滩上不长树（判定同样要放在 makeTree 之后）
+      if (riverContains(tree.x, tree.z, 7)) continue
       trees.push(tree)
     }
   }

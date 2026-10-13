@@ -12,6 +12,7 @@ import Buildings from '@/components/Buildings'
 import PlannedFacilities from '@/components/PlannedFacilities'
 import ChargingStation from '@/components/ChargingStation'
 import Pond from '@/components/Pond'
+import River from '@/components/River'
 import TrafficLights from '@/components/TrafficLights'
 import Cars from '@/components/Cars'
 import Weather from '@/components/Weather'
@@ -158,7 +159,7 @@ function CamProbe() {
   return null
 }
 
-export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1 }) {
+export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1, turbineCount = 48 }) {
   const preset = useMemo(() => mergeEnvironment(mode, weather), [mode, weather])
 
   return (
@@ -182,7 +183,7 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
 
         <Terrain />
 
-        <WindTurbines wind={wind} />
+        <WindTurbines wind={wind} count={turbineCount} />
 
         <SolarFarm />
 
@@ -204,6 +205,8 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
         <CityGround appearance={preset.ground} />
 
         <Pond />
+
+        <River />
 
         <OrbitControls
           makeDefault

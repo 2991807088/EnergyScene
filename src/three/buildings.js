@@ -22,9 +22,9 @@ const SKIP_RATE = 0.28 // 街区留空比例（绿地 / 停车场）
  * 部分住宅街区改用真实楼宇模型（Quaternius Downtown City MegaKit，
  * 见 three/buildingModels.js），其余保留程序化板楼 —— 混排既吃到模型的
  * 细节质感，又保住板楼的夜景窗光氛围，也避免同一款模型大面积重复。
- * 套件预拼楼只有 3 款（×4 朝向 = 12 种观感），比例压到 0.3 控制重复感。
+ * 套件预拼楼有 3 款（×4 朝向 = 12 种观感），优先铺设在住宅街区。
  */
-const MODEL_BLOCK_RATE = 0.3
+const MODEL_BLOCK_RATE = 0.8
 const MODEL_KEYS = ['quatLarge', 'quatMedium', 'quatSmall']
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1)
 const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
@@ -307,10 +307,10 @@ export function generateCity(seed = 20261012) {
       if (zone !== 'residential') continue
       if (rand() < SKIP_RATE) continue // 留空
       // 部分街区交给真实楼宇模型：款式 / 微偏移 / 朝向都用同一个 rand 决定，保持可复现
-      if (Math.max(Math.abs(bx), Math.abs(bz)) <= 160 && rand() < MODEL_BLOCK_RATE) {
+      if (rand() < MODEL_BLOCK_RATE) {
         modelSites.push({
-          x: bx + (rand() - 0.5) * 2.4,
-          z: bz + (rand() - 0.5) * 2.4,
+          x: bx + (rand() - 0.5) * 0.6,
+          z: bz + (rand() - 0.5) * 0.6,
           key: MODEL_KEYS[Math.floor(rand() * MODEL_KEYS.length)],
           rotationY: Math.floor(rand() * 4) * (Math.PI / 2)
         })

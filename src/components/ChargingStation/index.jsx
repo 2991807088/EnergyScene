@@ -5,6 +5,10 @@ import {
   buildChargingStation,
   chargingUnitBox,
   chargingPanelMaterial,
+  chargingMaterials,
+  chargingCableMaterial,
+  chargingCable,
+  stationSignTexture,
   CHARGING,
   CHARGING_OFFSET
 } from '@/three/chargingStation'
@@ -21,7 +25,21 @@ const CAR_PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(CHARGING.bay.x0 + CHARGING.bay.w / 2, 0, NORTH_AISLE_Z),
   new THREE.Vector3(CHARGING.bay.x0 + CHARGING.bay.w / 2, 0, CHARGING.bay.rowCenterZ[2])
 ])
-const CAR_STOP = CAR_PATH.getPoint(1)
+
+/** 驶入车辆最终停进的车位（棚下北排 0 号位） */
+const ARRIVE_BAY = { row: 2, i: 0 }
+const ARRIVE_CABLE = chargingCable(ARRIVE_BAY.row, ARRIVE_BAY.i)
+
+/** 门楣站名招牌（canvas 贴图平面，做法同厂区 / 规划区标牌） */
+function StationSign({ position, rotationY, width, height }) {
+  const texture = useMemo(() => stationSignTexture(), [])
+  return (
+    <mesh position={position} rotation={[0, rotationY, 0]}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  )
+}
 
 function ArrivingCar() {
   const car = useRef()
@@ -30,6 +48,24 @@ function ArrivingCar() {
   const position = useMemo(() => new THREE.Vector3(), [])
   const tangent = useMemo(() => new THREE.Vector3(), [])
   const { car: size } = CHARGING
+  const M = useMemo(chargingMaterials, [])
+  const cableMat = useMemo(chargingCableMaterial, [])
+  // 停车位置固定，线缆走线一次性建好（停稳后才显示）
+  const cableGeo = useMemo(
+    () =>
+      new THREE.TubeGeometry(
+        new THREE.QuadraticBezierCurve3(
+          new THREE.Vector3(...ARRIVE_CABLE.start),
+          new THREE.Vector3(...ARRIVE_CABLE.control),
+          new THREE.Vector3(...ARRIVE_CABLE.end)
+        ),
+        14,
+        0.045,
+        6,
+        false
+      ),
+    []
+  )
 
   useFrame(({ clock }) => {
     const time = clock.elapsedTime % CYCLE_TIME
@@ -61,9 +97,12 @@ function ArrivingCar() {
           <meshStandardMaterial ref={led} color="#1f7a45" emissive="#28c06a" emissiveIntensity={0.1} />
         </mesh>
       </group>
-      <mesh ref={cable} geometry={BOX_GEO} position={[CAR_STOP.x, 0.87, CAR_STOP.z - size.len / 2 - 0.5]} scale={[0.08, 0.08, 1]} visible={false}>
-        <meshStandardMaterial color="#28c06a" emissive="#28c06a" emissiveIntensity={1.4} />
-      </mesh>
+      {/* 停稳后从充电桩接出充电线：桩上枪座 -> 车头充电口 */}
+      <group ref={cable} visible={false}>
+        <mesh geometry={cableGeo} material={cableMat} castShadow />
+        <mesh geometry={BOX_GEO} material={M.charger} position={ARRIVE_CABLE.gun} scale={[0.18, 0.22, 0.3]} />
+        <mesh geometry={BOX_GEO} material={M.ledOn} position={ARRIVE_CABLE.tip} scale={[0.09, 0.09, 0.08]} />
+      </group>
     </>
   )
 }
@@ -78,11 +117,32 @@ function ArrivingCar() {
  *   · 静态方盒（场院 / 顶棚钢构 / 车位划线 / 充电桩 / 储能柜 / 车辆 / 管理房）—— 共用单位立方体
  *   · 围栏段 —— 每段自己的重复贴图，单独材质
  *   · 顶棚光伏 —— 一个 InstancedMesh，颜色走 instanceColor
- *   · 驶入车辆 —— 沿站内通道开进空车位，停稳后点亮充电指示
+ *   · 充电线 —— 每台在充电的车一条，从充电桩枪座垂到车头充电口（TubeGeometry 贝塞尔下垂）
+ *   · 门楣站名招牌 —— 「新能源超级充电站」，朝站外 / 站内各一面
+ *   · 驶入车辆 —— 沿站内通道开进空车位，停稳后点亮充电指示并接出充电线
  */
 export default function ChargingStation() {
-  const { boxes, fence, panels } = useMemo(() => buildChargingStation(), [])
+  const { boxes, fence, panels, cables, sign } = useMemo(() => buildChargingStation(), [])
   const panelMat = useMemo(() => chargingPanelMaterial(), [])
+  const cableMat = useMemo(chargingCableMaterial, [])
+  const cableGeos = useMemo(
+    () =>
+      cables.map(
+        (c) =>
+          new THREE.TubeGeometry(
+            new THREE.QuadraticBezierCurve3(
+              new THREE.Vector3(...c.start),
+              new THREE.Vector3(...c.control),
+              new THREE.Vector3(...c.end)
+            ),
+            14,
+            0.045,
+            6,
+            false
+          )
+      ),
+    [cables]
+  )
   const panelsRef = useRef()
 
   useLayoutEffect(() => {
@@ -134,6 +194,17 @@ export default function ChargingStation() {
         receiveShadow
         frustumCulled={false}
       />
+
+      {/* 充电线：每台在充电的车一条（枪座 -> 车头充电口） */}
+      {cables.map((c, i) => (
+        <mesh key={`cable${i}`} geometry={cableGeos[i]} material={cableMat} castShadow />
+      ))}
+
+      {/* 门楣站名招牌：朝站外 / 站内各一面 */}
+      {Object.values(sign).map((s, i) => (
+        <StationSign key={`sign${i}`} position={s.position} rotationY={s.rotationY} width={s.width} height={s.height} />
+      ))}
+
       <ArrivingCar />
     </group>
   )

@@ -6,6 +6,7 @@ import { terrainHeight } from '@/three/terrain'
 import { getTurbineSpin } from '@/three/environments'
 import { SOLAR_PANEL_TINT } from '@/three/solarFarm'
 import SmokePlume from '@/components/SmokePlume'
+import EastSubstation from '@/components/EastSubstation'
 
 const box = new THREE.BoxGeometry(1, 1, 1)
 const tower = new THREE.CylinderGeometry(0.38, 0.62, 1, 10)
@@ -212,25 +213,16 @@ function TaikooLi() {
 function PowerBuildings({ wind }) {
   const inc = CITY_ZONES.incineration
   const diesel = CITY_ZONES.diesel
-  const sy = terrainHeight(140, -128)
+  // 烟囱贴在厂房群南沿（朝城区一侧）：相对场区中心偏 15，随场区一起挪
+  const cz = (inc.minZ + inc.maxZ) / 2
+  const stackZ = cz - 15
+  const sy = terrainHeight(140, cz)
   return <>
     <Hall area={inc} name="垃圾焚烧电站" count={2} />
-    {[126, 144].map((x) => <mesh key={x} position={[x, sy + 21, -143]} castShadow><cylinderGeometry args={[2.2, 2.7, 42, 12]} /><meshStandardMaterial color="#aab5ba" roughness={0.75} /></mesh>)}
-    <SmokePlume mouths={[126, 144].map((x) => ({ x, y: sy + 42, z: -143, radius: 2.2 }))} wind={wind} />
+    {[126, 144].map((x) => <mesh key={x} position={[x, sy + 21, stackZ]} castShadow><cylinderGeometry args={[2.2, 2.7, 42, 12]} /><meshStandardMaterial color="#aab5ba" roughness={0.75} /></mesh>)}
+    <SmokePlume mouths={[126, 144].map((x) => ({ x, y: sy + 42, z: stackZ, radius: 2.2 }))} wind={wind} />
     <Hall area={diesel} name="柴油发电站" count={2} />
     {[112, 128, 144].map((x) => <mesh key={x} position={[x, 7, 88]} castShadow><cylinderGeometry args={[3.4, 3.4, 14, 16]} /><meshStandardMaterial color="#768992" metalness={0.45} roughness={0.47} /></mesh>)}
-  </>
-}
-
-function Substation() {
-  const area = CITY_ZONES.substation
-  return <>
-    <Pad area={area} />
-    <Hall area={{ minX: 105, maxX: 151, minZ: -85, maxZ: -62 }} name="变电站" count={1} />
-    {[-40, -19, 2].flatMap((z) => [111, 133, 151].map((x) => <group key={`${x}:${z}`}>
-      <Block x={x} y={0.2} z={z} w={10} h={3} d={8} material={dark} />
-      {[x - 3, x, x + 3].map((ix) => <mesh key={ix} position={[ix, 5.8, z]}><cylinderGeometry args={[0.55, 0.55, 8, 8]} /><meshStandardMaterial color="#d8e8e5" /></mesh>)}
-    </group>))}
   </>
 }
 
@@ -265,7 +257,7 @@ export default function PlannedFacilities({ wind = 0 }) {
   const solarBuildingX = EAST_SITES.solar.minX + 8
   return <>
     <PowerBuildings wind={wind} />
-    <Substation />
+    <EastSubstation />
     <TaikooLi />
     <Block x={-32} y={0} z={-100} w={22} h={5} d={0.4} material={dark} />
     <Sign name="新能源充电站" x={-32} y={3} z={-99.7} width={19} />

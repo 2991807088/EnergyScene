@@ -8,11 +8,18 @@ export default function App() {
   const [weather, setWeather] = useState('clear')
   const [wind, setWind] = useState(2)
   const [buildingLight, setBuildingLight] = useState(1)
+  const [turbineCount, setTurbineCount] = useState(48)
 
   return (
     <div className="app">
       <main className="app__body">
-        <Scene mode={timeOfDay} weather={weather} wind={wind} buildingLight={buildingLight} />
+        <Scene
+          mode={timeOfDay}
+          weather={weather}
+          wind={wind}
+          buildingLight={buildingLight}
+          turbineCount={turbineCount}
+        />
         <ControlPanel
           timeOfDay={timeOfDay}
           onTimeOfDayChange={setTimeOfDay}
@@ -22,6 +29,8 @@ export default function App() {
           onWindChange={setWind}
           buildingLight={buildingLight}
           onBuildingLightChange={setBuildingLight}
+          turbineCount={turbineCount}
+          onTurbineCountChange={setTurbineCount}
         />
       </main>
     </div>

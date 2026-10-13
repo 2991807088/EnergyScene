@@ -2,7 +2,7 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import { generateCity } from '@/three/buildings'
-import { BUILDING_MODELS, ALL_BUILDING_MODEL_URLS, bakeBuildingModel } from '@/three/buildingModels'
+import { BUILDING_MODELS, ALL_BUILDING_MODEL_URLS, bakeBuildingModel, isFakeInteriorMaterial } from '@/three/buildingModels'
 
 function BuildingBatch({ batch }) {
   const ref = useRef()
@@ -20,9 +20,9 @@ function BuildingBatch({ batch }) {
   return <instancedMesh ref={ref} args={[batch.geometry, batch.material, batch.meshes.length]} castShadow receiveShadow />
 }
 
-/** 模型楼窗光基准强度（Kenney 图集无独立发光通道，用贴图本身兼作 emissiveMap；
- *  强度取低值 —— 只求夜里楼体隐约可辨，避免白墙整面发光像「鬼楼」） */
-const MODEL_GLOW = 0.06
+/** 模型楼窗光基准强度：只有「假内景」窗材质发光（emissiveMap = 亮灯内景贴图），
+ *  暗内景贴图本身近黑，发光后依然近黑；墙面/砖石不带发光。 */
+const MODEL_GLOW = 0.5
 
 /**
  * 真实楼宇模型：渲染 generateCity 划出的 modelSites（部分住宅街区）。
@@ -37,18 +37,25 @@ function ModelBuildings({ sites, lightLevel }) {
       templates[key] = bakeBuildingModel(gltfs[i].scene, BUILDING_MODELS[key])
     })
 
-    // 每款收集一份发光材质克隆：emissiveMap 复用图集，夜晚窗户泛光随 lightLevel 调节
+    // 克隆材质并挂发光：Quaternius 楼是「单网格多材质组」，必须整组克隆替换，
+    // 只取 material[0] 会把整栋楼刷成第一种材质。
+    // 窗（FakeInterior）材质：emissiveMap 复用亮灯内景贴图，夜晚窗光随 lightLevel 调节。
     const materials = []
     for (const tpl of Object.values(templates)) {
       tpl.traverse((o) => {
         if (!o.isMesh) return
-        const src = Array.isArray(o.material) ? o.material[0] : o.material
-        const m = src.clone()
-        m.emissive = new THREE.Color('#ffffff')
-        m.emissiveMap = src.map ?? null
-        m.emissiveIntensity = MODEL_GLOW * lightLevel
-        o.material = m
-        materials.push(m)
+        const multi = Array.isArray(o.material)
+        const cloned = (multi ? o.material : [o.material]).map((src) => {
+          const m = src.clone()
+          if (isFakeInteriorMaterial(src)) {
+            m.emissive = new THREE.Color('#ffffff')
+            m.emissiveMap = src.map
+            m.emissiveIntensity = MODEL_GLOW * lightLevel
+            materials.push(m)
+          }
+          return m
+        })
+        o.material = multi ? cloned : cloned[0]
       })
     }
 
