@@ -1,8 +1,8 @@
-// 城市 +z 边的大型光伏电站：宽度随城区变化、深度 90，面板朝 -z 倾斜。
+// 东侧规划区的新光伏电站：面板朝 -z 倾斜。
 // 支架基准取占地采样的最高地面，柱脚独立贴地；面板和立柱采用实例渲染。
 import * as THREE from 'three'
 import { terrainHeight } from './terrain'
-import { GROUND_SIZE } from './cityLayout'
+import { EAST_SITES } from './cityLayout'
 
 const DEG = Math.PI / 180
 
@@ -44,20 +44,19 @@ const FOOT_GRID = [-1, 0, 1]
  * @property {number} salt     面板色调抖动的随机偏移
  */
 
-/** 城市 +z 边的大型电站，宽度与城市地面一致。 */
-const EDGE_WIDTH = GROUND_SIZE
-const EDGE_DEPTH = 90 // 从城边往 +z 铺出去多深
-const EDGE_GAP = 1 // 与城市地面边留 1 的缝，免得和地面边线糊在一起
+/** 东侧独立光伏用地。 */
+const EDGE_WIDTH = 132
+const EDGE_DEPTH = 58
 const EDGE_COLS = Math.round(EDGE_WIDTH / 5.8)
-const EDGE_ROWS = 16
+const EDGE_ROWS = 11
 // 间距由跨度反算，让最外侧支架与城区两侧边界对齐。
 const EDGE_COL_PITCH = (EDGE_WIDTH - SOLAR_TABLE.width) / (EDGE_COLS - 1)
 // 一张支架沿 z 的占地 = 斜面在水平面的投影
 const EDGE_ROW_PITCH = (EDGE_DEPTH - TABLE_HALF_Z * 2) / (EDGE_ROWS - 1)
 
 const FARM_EDGE = {
-  cx: 0,
-  cz: GROUND_SIZE / 2 + EDGE_GAP + EDGE_DEPTH / 2,
+  cx: (EAST_SITES.solar.minX + EAST_SITES.solar.maxX) / 2,
+  cz: (EAST_SITES.solar.minZ + EAST_SITES.solar.maxZ) / 2,
   yaw: Math.PI, // 行列对齐城市网格；面板往 -z 斜（太阳的 z 分量在 -z 侧）
   rows: EDGE_ROWS,
   cols: EDGE_COLS,
@@ -68,12 +67,12 @@ const FARM_EDGE = {
 
 const FARM_CONFIGS = [FARM_EDGE]
 
-/** 城市 +z 电站的占地（世界 XZ），供校验与调试 */
+/** 新光伏电站的占地（世界 XZ），供校验与调试 */
 export const EDGE_FARM_SPAN = {
   x: EDGE_WIDTH,
   z: EDGE_DEPTH,
-  nearZ: GROUND_SIZE / 2 + EDGE_GAP,
-  farZ: GROUND_SIZE / 2 + EDGE_GAP + EDGE_DEPTH,
+  nearZ: EAST_SITES.solar.minZ,
+  farZ: EAST_SITES.solar.maxZ,
   depth: EDGE_DEPTH
 }
 

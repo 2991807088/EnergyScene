@@ -1,5 +1,6 @@
-import { useMemo, useRef } from 'react'
+import { Suspense, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useGLTF } from '@react-three/drei'
 import {
   verticalRoadX,
   horizontalRoadZ,
@@ -12,6 +13,7 @@ import {
   mulberry32
 } from '@/three/cityLayout'
 import { signalAt } from '@/three/traffic'
+import { CAR_SPECS, ALL_CAR_MODEL_URLS, bakeCarModel } from '@/three/carModels'
 
 /**
  * 两轴上的路口网格坐标（车到路口前据此判断是否该停）。
@@ -31,72 +33,41 @@ const LANE_OFF = ASPHALT / 4
 /** 跑车的道路（网格线序号）—— 正好是中心广场四角那四条 */
 const LANE_LINES = CORE_ROAD_LINES
 
-const CAR_COLORS = [
-  '#e2483d',
-  '#2f6fd0',
-  '#e8e8ea',
-  '#26282c',
-  '#37a86b',
-  '#e0a52f'
+/** 车型按权重混排：轿车为主，货车/公交点缀（权重和不必为 1） */
+const TYPE_WEIGHTS = [
+  ['sedan', 3],
+  ['sedanSports', 1.5],
+  ['suv', 2.5],
+  ['suvLuxury', 1.5],
+  ['van', 1.5],
+  ['taxi', 1.5],
+  ['delivery', 1],
+  ['deliveryFlat', 1],
+  ['truck', 1],
+  ['truckFlat', 1],
+  ['bus', 0.8]
 ]
+const TYPE_TOTAL = TYPE_WEIGHTS.reduce((s, [, w]) => s + w, 0)
 
-/** 静态车模型（车头朝 +x） */
-function CarModel({ color }) {
-  return (
-    <group>
-      {/* 车身 */}
-      <mesh position={[0, 0.42, 0]} castShadow>
-        <boxGeometry args={[1.8, 0.44, 0.86]} />
-        <meshStandardMaterial color={color} roughness={0.35} metalness={0.5} />
-      </mesh>
-      {/* 座舱 */}
-      <mesh position={[-0.08, 0.82, 0]} castShadow>
-        <boxGeometry args={[0.95, 0.4, 0.78]} />
-        <meshStandardMaterial color="#1b1e22" roughness={0.2} metalness={0.6} />
-      </mesh>
-      {/* 车轮 */}
-      {[
-        [0.55, 0.45],
-        [0.55, -0.45],
-        [-0.55, 0.45],
-        [-0.55, -0.45]
-      ].map(([wx, wz], i) => (
-        <mesh
-          key={i}
-          position={[wx, 0.18, wz]}
-          rotation={[Math.PI / 2, 0, 0]}
-          castShadow
-        >
-          <cylinderGeometry args={[0.18, 0.18, 0.14, 12]} />
-          <meshStandardMaterial color="#141517" roughness={0.9} />
-        </mesh>
-      ))}
-      {/* 前照灯 */}
-      {[0.26, -0.26].map((z) => (
-        <mesh key={`f${z}`} position={[0.91, 0.44, z]}>
-          <boxGeometry args={[0.06, 0.14, 0.2]} />
-          <meshStandardMaterial
-            color="#fff6d5"
-            emissive="#fff1c0"
-            emissiveIntensity={2}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-      {/* 尾灯 */}
-      {[-0.26, 0.26].map((z) => (
-        <mesh key={`b${z}`} position={[-0.91, 0.44, z]}>
-          <boxGeometry args={[0.06, 0.12, 0.18]} />
-          <meshStandardMaterial
-            color="#7a1414"
-            emissive="#ff2b2b"
-            emissiveIntensity={1.6}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-    </group>
-  )
+/** 按权重随机选一个车型 key */
+function pickCarType(rand) {
+  let x = rand() * TYPE_TOTAL
+  for (const [key, w] of TYPE_WEIGHTS) {
+    if ((x -= w) < 0) return key
+  }
+  return TYPE_WEIGHTS[0][0]
+}
+
+/** 一次性加载全部车型并烘成模板（每种车型只烘一次，实例间共享几何/材质） */
+function useCarTemplates() {
+  const gltfs = useGLTF(ALL_CAR_MODEL_URLS)
+  return useMemo(() => {
+    const templates = {}
+    Object.keys(CAR_SPECS).forEach((key, i) => {
+      templates[key] = bakeCarModel(gltfs[i].scene, CAR_SPECS[key])
+    })
+    return templates
+  }, [gltfs])
 }
 
 /**
@@ -113,9 +84,11 @@ function generateCars() {
     lanes.push({ axis: 'z', fixed: vx - LANE_OFF, dir: 1 })
     lanes.push({ axis: 'z', fixed: vx + LANE_OFF, dir: -1 })
 
-    const hz = horizontalRoadZ(n)
-    lanes.push({ axis: 'x', fixed: hz + LANE_OFF, dir: 1 })
-    lanes.push({ axis: 'x', fixed: hz - LANE_OFF, dir: -1 })
+    if (n !== CORE_ROAD_LINES[1]) { // 公园内中断的横路不通车
+      const hz = horizontalRoadZ(n)
+      lanes.push({ axis: 'x', fixed: hz + LANE_OFF, dir: 1 })
+      lanes.push({ axis: 'x', fixed: hz - LANE_OFF, dir: -1 })
+    }
   }
 
   const cars = []
@@ -132,23 +105,32 @@ function generateCars() {
             ? -Math.PI / 2
             : Math.PI / 2
 
+      const type = pickCarType(rand)
       cars.push({
         ...lane,
         along,
         position: lane.axis === 'x' ? [along, 0, lane.fixed] : [lane.fixed, 0, along],
         rotationY,
-        speed: 5 + rand() * 5,
-        color: CAR_COLORS[Math.floor(rand() * CAR_COLORS.length)]
+        type,
+        speed: (5 + rand() * 5) * CAR_SPECS[type].speed
       })
     }
   }
   return cars
 }
 
-/** 车流：所有车共用一个 useFrame 统一驱动，并遵守红绿灯 */
-export default function Cars() {
+/**
+ * 车流：所有车共用一个 useFrame 统一驱动，并遵守红绿灯。
+ * 模型来自 public/models/cars/（Kenney Car Kit + Poly Pizza 公交，见 three/carModels.js），
+ * 加载期间本组件整体挂起，不阻塞场景其余部分。
+ */
+function CarsInner() {
   const refs = useRef([])
-  const cars = useMemo(() => generateCars(), [])
+  const templates = useCarTemplates()
+  const cars = useMemo(() => {
+    // 模板就绪后再实例化：clone 共享几何与材质，每辆车只有独立变换
+    return generateCars().map((car) => ({ ...car, obj: templates[car.type].clone() }))
+  }, [templates])
 
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.05)
@@ -204,9 +186,20 @@ export default function Cars() {
           position={car.position}
           rotation={[0, car.rotationY, 0]}
         >
-          <CarModel color={car.color} />
+          <primitive object={car.obj} />
         </group>
       ))}
     </group>
   )
 }
+
+export default function Cars() {
+  return (
+    <Suspense fallback={null}>
+      <CarsInner />
+    </Suspense>
+  )
+}
+
+// 提前发起全部车型模型的加载
+useGLTF.preload(ALL_CAR_MODEL_URLS)

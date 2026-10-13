@@ -32,11 +32,10 @@
 //    · 光伏组件几何 / 材质复用地面电站的（three/solarFarm.js），保证全场景一致
 // ============================================================
 import * as THREE from 'three'
-import { CITY_EXPANSION } from './cityLayout'
 import { SOLAR_MATERIALS, SOLAR_PANEL_TINT, SOLAR_TABLE } from './solarFarm'
 
 const DEG = Math.PI / 180
-export const CHARGING_OFFSET = { x: CITY_EXPANSION, z: -CITY_EXPANSION }
+export const CHARGING_OFFSET = { x: -88, z: -64 }
 
 /** 场地（围栏）范围与各分区参数 */
 export const CHARGING = {

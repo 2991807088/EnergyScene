@@ -8,10 +8,10 @@
 //    「太阳比山/风机还低」这种看着不合理的画面
 // ============================================================
 import * as THREE from 'three'
-import { CITY_HALF, mulberry32 } from './cityLayout'
+import { CITY_HALF, EAST_SITES, mulberry32 } from './cityLayout'
 
-export const TERRAIN_HALF = 450
-export const TERRAIN_SEGMENTS = 450 // 保持每格 2 单位的地形精度
+export const TERRAIN_HALF = 500
+export const TERRAIN_SEGMENTS = 500 // 保持每格 2 单位的地形精度
 
 /** 山脊带中心方位（与默认视线、太阳方位同向 → 山在正前方当背景） */
 export const RANGE_AZIMUTH = -2.266
@@ -89,7 +89,24 @@ function fbm(x, y, seed, octaves) {
  * 地形高度场。
  * @returns {number} 该点的地面高度（城区内恒为 0）
  */
+const EAST_AREAS = [EAST_SITES.factoryNorth, EAST_SITES.factorySouth]
+
 export function terrainHeight(x, z) {
+  const h = naturalHeight(x, z)
+  if (x < EAST_SITES.wind.minX - 14) return h
+  // 仅厂房用地需要平整；风机和光伏阵列直接落在自然低丘上。
+  let distance = Infinity
+  for (const site of EAST_AREAS) {
+    distance = Math.min(distance, Math.hypot(
+      Math.max(site.minX - x, 0, x - site.maxX),
+      Math.max(site.minZ - z, 0, z - site.maxZ)
+    ))
+  }
+  return h * smoothstep(0, 14, distance)
+}
+
+/** 自然地形高度（未施加城北厂区平整） */
+function naturalHeight(x, z) {
   const sq = Math.max(Math.abs(x), Math.abs(z))
   if (sq <= CITY_HALF) return 0 // 城区：保持水平
 

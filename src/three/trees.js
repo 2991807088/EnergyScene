@@ -8,10 +8,10 @@
 //  - 输出「实例批次」：一个批次一个 InstancedMesh，几百棵树只要十几次 draw call
 // ============================================================
 import * as THREE from 'three'
-import { CITY_HALF, PARK_AREAS, mulberry32 } from './cityLayout'
+import { CITY_HALF, CENTRAL_PARK, EAST_SITES, PARK_AREAS, inArea, isInsideTrack, mulberry32 } from './cityLayout'
 import { terrainHeight, TERRAIN_HALF, TERRAIN_SEGMENTS } from './terrain'
-import { isInsideEnergyGrid } from './substation'
 import { isInsideSolarFarm } from './solarFarm'
+import { POND, pondContains } from './pond'
 
 // ---------- 共享材质（颜色交给 instanceColor） ----------
 export const TREE_MATERIALS = {
@@ -169,23 +169,25 @@ export function pickTreeSpots(seed = 20261013) {
   const rand = mulberry32(seed)
   const trees = []
 
-  // ---- 1) 城市中心的四块树阵 ----
-  // 中心广场的四块街区（中心 ±8，范围 [0,16] / [-16,0]）不盖楼，全部种树。
-  // 每轴取 5.0 / 8.6 / 12.2 三个位置：
-  //   到最近道路中线 3.8，减去路宽 1.8 还剩 2.0 可用；
-  //   两个树种的最大树冠半径（见下方 SPECIES 与模型实测半宽）算出来是
+  // ---- 1) 中央绿地的树阵（绿地占四个格子，±13.2） ----
+  // 绿地边界取 ±13.2 = 16 − 路宽一半 2.8，也就是一直铺到路缘，把 x/z = ±16 那四条
+  // 主干道围住的 2×2 街区填满。树按 6×6 均匀网格铺开、覆盖到 ±11：
+  //   到最近道路中线 16 的净距 16 − 11 = 5，减去路宽一半 2.8 还剩 2.2；
+  //   两种树的树冠半径（见下方 SPECIES 与模型实测半宽）是
   //   针叶树 0.1721×6.4 = 1.101、阔叶树 0.3016×5.2 = 1.568，
-  //   留出的余量 2.0 − 1.568 = 0.432，树冠不会伸到马路上；
-  //   同时刻意避开 0 和 ±16 这两组路中线。
-  const CENTRAL_OFFSETS = [4, 7, 10]
+  //   余量 2.2 − 1.568 = 0.632，树冠不会伸到马路上。
+  // 池塘、跑道范围（含岸带和树冠余量）不种树。
+  //   这里仍然照常调用 makeTree、只是有条件地丢弃结果 —— rand() 的消耗与从前
+  //   逐棵一致（6×6×9 = 324 次），所以绿地以外的树仍逐棵保持原位。
+  const CENTRAL_OFFSETS = [-11, -6.6, -2.2, 2.2, 6.6, 11]
   for (const ox of CENTRAL_OFFSETS) {
     for (const oz of CENTRAL_OFFSETS) {
-      for (const sx of [-1, 1]) {
-        for (const sz of [-1, 1]) {
-          // 中心树阵只用两种高树，保持"整齐"的观感
-          trees.push(makeTree(rand, rand() < 0.58 ? 'conifer' : 'broadleaf', ox * sx, oz * sz, 0))
-        }
-      }
+      // 中心树阵只用两种高树，保持"整齐"的观感
+      const x = (CENTRAL_PARK.minX + CENTRAL_PARK.maxX) / 2 + ox * 2.2
+      const z = (CENTRAL_PARK.minZ + CENTRAL_PARK.maxZ) / 2 + oz * 5
+      const tree = makeTree(rand, rand() < 0.58 ? 'conifer' : 'broadleaf', x, z, 0)
+      if (pondContains(x, z, POND.bank + 1.5) || isInsideTrack(x, z, 1.8)) continue
+      trees.push(tree)
     }
   }
 
@@ -221,7 +223,7 @@ export function pickTreeSpots(seed = 20261013) {
       // 判定必须放在 makeTree 之后：makeTree 自己会消耗 8 个随机数，
       // 提前 continue 会把整条随机流推移，后面几十棵树会全部换位置。
       if (isInsideSolarFarm(tree.x, tree.z)) continue
-      if (isInsideEnergyGrid(tree.x, tree.z)) continue
+      if (Object.values(EAST_SITES).some((site) => inArea(tree.x, tree.z, site, 7))) continue
       trees.push(tree)
     }
   }

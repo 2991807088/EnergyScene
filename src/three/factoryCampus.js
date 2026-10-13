@@ -76,8 +76,8 @@ const HALL_CZ = (CAMPUS.minZ + CAMPUS.maxZ) / 2
 
 // ---------- 贴图 ----------
 
-/** 厂房外墙：浅灰工业板 + 顶部一条高窗带 + 竖向板缝 */
-function makeWallCanvas() {
+/** 厂房外墙：浅灰工业板 + 顶部一条高窗带 + 竖向板缝（城北工厂复用，已导出） */
+export function makeWallCanvas() {
   const W = 128
   const H = 128
   const c = document.createElement('canvas')
@@ -122,8 +122,8 @@ function makeWallCanvas() {
   return c
 }
 
-/** 围栏：细密金属网格（用 alphaTest 抠出镂空，比半透明更稳） */
-function makeFenceCanvas() {
+/** 围栏：细密金属网格（用 alphaTest 抠出镂空，比半透明更稳）（城北工厂复用，已导出） */
+export function makeFenceCanvas() {
   const S = 64
   const c = document.createElement('canvas')
   c.width = c.height = S

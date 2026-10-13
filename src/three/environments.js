@@ -33,6 +33,7 @@ export const ENVIRONMENTS = {
       glow: 0.45,
       disc: 1,
       discAngle: 0.029,
+      crescent: 0, // 白天是完整的太阳圆面
       cloudColor: '#ffffff',
       cloudShade: '#b9cbe0',
       cloudCover: 0.34,
@@ -69,6 +70,9 @@ export const ENVIRONMENTS = {
       glow: 0.2,
       disc: 0.95,
       discAngle: 0.024,
+      // 弯月：>0 时把月盘削成月牙，数值 = 暗盘平移量 / 月盘半径。
+      // 0.7 对应月牙最宽处约月盘直径的 35%，是「一轮弯月」而不是「细钩」或「缺口的圆」。
+      crescent: 0.7,
       cloudColor: '#3d4c64',
       cloudShade: '#1c2534',
       cloudCover: 0.34,

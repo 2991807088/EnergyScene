@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { OrbitControls } from '@react-three/drei'
@@ -9,9 +9,9 @@ import WindTurbines from '@/components/WindTurbines'
 import SolarFarm from '@/components/SolarFarm'
 import Forest from '@/components/Forest'
 import Buildings from '@/components/Buildings'
-import FactoryCampus from '@/components/FactoryCampus'
+import PlannedFacilities from '@/components/PlannedFacilities'
 import ChargingStation from '@/components/ChargingStation'
-import Substation from '@/components/Substation'
+import Pond from '@/components/Pond'
 import TrafficLights from '@/components/TrafficLights'
 import Cars from '@/components/Cars'
 import Weather from '@/components/Weather'
@@ -108,6 +108,56 @@ function DayNightRig({ preset, weather }) {
   )
 }
 
+/** 临时取景探针：?cam=x,y,z&target=x,y,z（校验用，验证完删除） */
+function CamProbe() {
+  const { camera, controls } = useThree()
+  useEffect(() => {
+    console.log('[CamProbe] mounted, cam=', camera.position.toArray().map((v) => +v.toFixed(1)))
+    let tries = 0
+    const apply = () => {
+      const q = new URLSearchParams(window.location.search)
+      const cam = q.get('cam')
+      const tgt = q.get('target')
+      if (cam) camera.position.set(...cam.split(',').map(Number))
+      if (tgt && controls) {
+        controls.target.set(...tgt.split(',').map(Number))
+        controls.update()
+        return true
+      }
+      return false
+    }
+    // makeDefault 的 controls 可能晚于本 effect 就绪，重试直到设置成功
+    const timer = setInterval(() => {
+      const done = apply() || ++tries > 20
+      if (done) {
+        clearInterval(timer)
+        console.log(
+          '[CamProbe] final cam=',
+          camera.position.toArray().map((v) => +v.toFixed(1)),
+          'target=',
+          controls?.target.toArray().map((v) => +v.toFixed(1)),
+          'search=',
+          window.location.search
+        )
+        let ticks = 0
+        const monitor = setInterval(() => {
+          console.log(
+            '[CamProbe] t+' + ++ticks + 's cam=',
+            camera.position.toArray().map((v) => +v.toFixed(1)),
+            'target=',
+            controls?.target.toArray().map((v) => +v.toFixed(1)),
+            'fov=',
+            camera.fov
+          )
+          if (ticks >= 4) clearInterval(monitor)
+        }, 2000)
+      }
+    }, 250)
+    return () => clearInterval(timer)
+  }, [camera, controls])
+  return null
+}
+
 export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1 }) {
   const preset = useMemo(() => mergeEnvironment(mode, weather), [mode, weather])
 
@@ -116,7 +166,7 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [5, 3.4, 6], fov: 45, near: 0.5, far: 1500 }}
+        camera={{ position: [500, 350, 450], fov: 45, near: 0.5, far: 1400 }}
       >
         <color attach="background" args={['#0a0d13']} />
         {/* 雾的初值：挂载后立刻由 DayNightRig 拉到预设值，所以给个「远」的初值，
@@ -140,11 +190,10 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
 
         <Buildings lightLevel={buildingLight} />
 
-        <FactoryCampus />
+        <PlannedFacilities wind={wind} />
 
         <ChargingStation />
 
-        <Substation />
 
         <TrafficLights />
 
@@ -154,15 +203,19 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
 
         <CityGround appearance={preset.ground} />
 
+        <Pond />
+
         <OrbitControls
           makeDefault
-          target={[0, 3.2, 0]}
+          target={[100, 0, 0]}
           enableDamping
           dampingFactor={0.08}
           minDistance={3}
-          maxDistance={420}
+          maxDistance={900}
           maxPolarAngle={Math.PI / 2 - 0.02}
         />
+
+        <CamProbe />
       </Canvas>
     </div>
   )

@@ -1,23 +1,18 @@
 import * as THREE from 'three'
 import {
   GROUND_SIZE, GRID_MIN, GRID_MAX, ROAD_LINES, LOCAL_ROAD_LINES,
-  ROAD_WIDTH, ASPHALT, PARK_AREAS,
+  ROAD_WIDTH, ASPHALT, CENTRAL_PARK, ATHLETICS_TRACK, PARK_AREAS, cityZone,
   verticalRoadX, horizontalRoadZ, mulberry32
 } from './cityLayout'
-import { CAMPUS, CAMPUS_OFFSET, isInsideCampus } from './factoryCampus'
-import { CHARGING, CHARGING_OFFSET, isInsideChargingStation } from './chargingStation'
+import { POND, pondOutline } from './pond'
 
 const HALF = GROUND_SIZE / 2
-const shifted = (area, offset) => ({
-  minX: area.minX + offset.x, maxX: area.maxX + offset.x,
-  minZ: area.minZ + offset.z, maxZ: area.maxZ + offset.z
-})
-const RESERVED = [shifted(CAMPUS, CAMPUS_OFFSET), shifted(CHARGING, CHARGING_OFFSET), ...PARK_AREAS]
+const RESERVED = [CENTRAL_PARK, ...PARK_AREAS]
 
 function roadSegments(axis, coordinate, major) {
   let segments = [[GRID_MIN, GRID_MAX]]
-  if (major) return segments
   for (const area of RESERVED) {
+    if (major && area !== CENTRAL_PARK) continue
     const fixed = axis === 'z' ? [area.minX, area.maxX] : [area.minZ, area.maxZ]
     if (coordinate < fixed[0] - 2 || coordinate > fixed[1] + 2) continue
     const lo = (axis === 'z' ? area.minZ : area.minX) - 1
@@ -50,6 +45,15 @@ export function createCityTexture(size = 4096) {
     ctx.fillStyle = color
     ctx.fillRect(X(x), Y(z), w * scale, d * scale)
   }
+  // 世界坐标多边形（[[x, z], ...]）→ 画布填充
+  const poly = (points, color) => {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(X(points[0][0]), Y(points[0][1]))
+    for (let i = 1; i < points.length; i++) ctx.lineTo(X(points[i][0]), Y(points[i][1]))
+    ctx.closePath()
+    ctx.fill()
+  }
   const rand = mulberry32(4242)
   rect(-HALF, -HALF, GROUND_SIZE, GROUND_SIZE, '#899181')
   // 地块以真实道路围合边界划分，不再每 16 单位画一个铺装方格。
@@ -64,17 +68,67 @@ export function createCityTexture(size = 4096) {
       const z = top.coordinate + top.width / 2 + 0.25
       const w = right.coordinate - right.width / 2 - 0.25 - x
       const d = bottom.coordinate - bottom.width / 2 - 0.25 - z
-      if (isInsideCampus(x + w / 2, z + d / 2) || isInsideChargingStation(x + w / 2, z + d / 2)) continue
-      rect(x, z, w, d, plots[Math.floor(rand() * plots.length)])
+      const zone = cityZone(x + w / 2, z + d / 2)
+      const color = zone === 'business' ? '#8f9da5' : zone === 'mall' ? '#aab0ac' :
+        ['incineration', 'diesel', 'substation', 'charging'].includes(zone) ? '#929b9a' :
+          plots[Math.floor(rand() * plots.length)]
+      rect(x, z, w, d, color)
       if (w > 20 && d > 20) rect(x + 1, z + 1, w - 2, 1.5, '#6b805d')
     }
   }
-  const parks = [{ minX: -13, maxX: 13, minZ: -13, maxZ: 13 }, ...PARK_AREAS]
+  const parks = [CENTRAL_PARK, ...PARK_AREAS]
   for (const p of parks) {
     rect(p.minX, p.minZ, p.maxX - p.minX, p.maxZ - p.minZ, '#617d54')
-    rect((p.minX + p.maxX) / 2 - 0.75, p.minZ, 1.5, p.maxZ - p.minZ, '#b9b5a3')
-    rect(p.minX, (p.minZ + p.maxZ) / 2 - 0.75, p.maxX - p.minX, 1.5, '#b9b5a3')
   }
+  // 椭圆田径场：红色跑道、四条分道线和中央足球场。
+  const { x: tx, z: tz, halfWidth, halfLength } = ATHLETICS_TRACK
+  const trackPath = (inset) => {
+    const w = halfWidth - inset
+    const l = halfLength - inset
+    ctx.beginPath()
+    ctx.roundRect(X(tx - w), Y(tz - l), w * 2 * scale, l * 2 * scale, w * scale)
+  }
+  trackPath(0)
+  ctx.fillStyle = '#ad5140'
+  ctx.fill()
+  ctx.strokeStyle = '#f3e5d6'
+  ctx.lineWidth = 0.13 * scale
+  for (const inset of [0.3, 1.7, 3.1, 4.5, 5.8]) {
+    trackPath(inset)
+    ctx.stroke()
+  }
+  trackPath(6)
+  ctx.fillStyle = '#417a48'
+  ctx.fill()
+
+  // 足球草坪与标线：边线、中线、中圈、禁区和球门区。
+  const pitchX = tx - 9
+  const pitchZ = tz - 16
+  rect(pitchX, pitchZ, 18, 32, '#4b8951')
+  for (let i = 0; i < 4; i += 2) rect(pitchX, pitchZ + i * 8, 18, 8, '#518f57')
+  ctx.strokeStyle = '#edf2e4'
+  ctx.lineWidth = 0.16 * scale
+  ctx.strokeRect(X(pitchX), Y(pitchZ), 18 * scale, 32 * scale)
+  ctx.beginPath()
+  ctx.moveTo(X(pitchX), Y(tz))
+  ctx.lineTo(X(pitchX + 18), Y(tz))
+  ctx.moveTo(X(tx), Y(tz))
+  ctx.arc(X(tx), Y(tz), 3.5 * scale, 0, Math.PI * 2)
+  ctx.stroke()
+  for (const end of [-1, 1]) {
+    const z = tz + end * 16
+    ctx.strokeRect(X(tx - 6), Y(end < 0 ? z : z - 5), 12 * scale, 5 * scale)
+    ctx.strokeRect(X(tx - 3), Y(end < 0 ? z : z - 2), 6 * scale, 2 * scale)
+    ctx.strokeRect(X(tx - 2.5), Y(end < 0 ? z - 1 : z), 5 * scale, 1 * scale)
+    ctx.beginPath()
+    ctx.arc(X(tx), Y(tz + end * 11), 0.22 * scale, 0, Math.PI * 2)
+    ctx.fillStyle = '#edf2e4'
+    ctx.fill()
+  }
+  // 池塘与水面共用轮廓，岸带全部留在公园内。
+  poly(pondOutline(POND.bank), '#a8a48f')
+  poly(pondOutline(POND.bank * 0.42), '#7d8f92')
+  poly(pondOutline(), '#3c5f7d')
   for (let i = 0; i < 16000; i++) {
     ctx.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)'
     ctx.fillRect(rand() * size, rand() * size, 2, 2)

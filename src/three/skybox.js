@@ -21,6 +21,14 @@ const SUN_X = DIR.x
 const SUN_Y = DIR.y
 const SUN_Z = DIR.z
 
+// 弯月的「暗盘」平移方向：水平面内与月盘方向垂直的切向量（= UP × DIR）。
+// 取水平方向是有意的：默认机位几乎正对月亮，水平平移在屏幕上就是左右方向，
+// 于是月牙两头朝上下——最好认的那种弯月，而不是「被咬了一口的圆」。
+const MOON_TAN = new THREE.Vector3(DIR.z, 0, -DIR.x).normalize()
+const MOON_TAN_X = MOON_TAN.x
+const MOON_TAN_Y = MOON_TAN.y
+const MOON_TAN_Z = MOON_TAN.z
+
 // ============================================================
 //  方向约定（实测得出，别再靠推导）
 // ============================================================
@@ -110,6 +118,7 @@ export const SKY_KEYS = [
   'glow',
   'disc',
   'discAngle',
+  'crescent',
   'cloudColor',
   'cloudShade',
   'cloudCover',
@@ -192,6 +201,23 @@ export function makeSkyPre(p, pre = {}) {
   const cosEdge = Math.cos(p.discAngle)
   pre.cosEdge = cosEdge
   pre.cosInner = cosEdge - 0.0006
+
+  // 弯月：把「暗盘」沿切向平移 crescent × 月盘角半径。
+  // 月牙 = 月盘 − 平移后的同半径暗盘，平移量越大月牙越细。
+  // 这里只算出暗盘的中心方向（单位向量），逐像素时和日月盘用同一套阈值比对。
+  const crescent = p.crescent || 0
+  if (crescent > 0.001) {
+    const t = Math.tan(crescent * p.discAngle)
+    const ox = SUN_X + MOON_TAN_X * t
+    const oy = SUN_Y + MOON_TAN_Y * t
+    const oz = SUN_Z + MOON_TAN_Z * t
+    const inv = 1 / Math.sqrt(ox * ox + oy * oy + oz * oz)
+    pre.moonX = ox * inv
+    pre.moonY = oy * inv
+    pre.moonZ = oz * inv
+  } else {
+    pre.moonX = pre.moonY = pre.moonZ = 0
+  }
   return pre
 }
 
@@ -215,7 +241,7 @@ export function skyPixel(dx, dy, dz, p, pre, out = _out) {
 
   const s = dx * SUN_X + dy * SUN_Y + dz * SUN_Z
 
-  // ---- 2. 太阳 / 月亮：光晕（加法）+ 本体（软边圆盘）----
+  // ---- 2. 太阳 / 月亮：光晕（加法）+ 本体（软边圆盘，弯月时只留月牙）----
   if (p.glow > 0.002 && s > 0) {
     // 拆成两层：紧贴着日面的一层强光晕 + 很大范围的一层弱暖光。
     // 只用 s^6 的话半强半径约 27°，整片天空都被洗成灰白——那正是要修掉的「雾蒙蒙」。
@@ -232,7 +258,15 @@ export function skyPixel(dx, dy, dz, p, pre, out = _out) {
     b += p.glowColor[2] * halo
   }
   if (p.disc > 0.002) {
-    const d0 = smoothstep(pre.cosInner, pre.cosEdge, s) * p.disc
+    let d0 = smoothstep(pre.cosInner, pre.cosEdge, s) * p.disc
+    // 夜里画的是弯月：再减掉平移过的暗盘。
+    // 亮度上等价于「圆盘 × (1 − 暗盘)」，暗的那半边直接露出天空底色
+    // （月亮暗面本来就看不见），而不是填一块暗色圆。
+    // crescent = 0（白天）时这一步不生效，仍是完整的太阳圆面。
+    if (p.crescent > 0.001) {
+      const sm = dx * pre.moonX + dy * pre.moonY + dz * pre.moonZ
+      d0 *= 1 - smoothstep(pre.cosInner, pre.cosEdge, sm)
+    }
     if (d0 > 0) {
       r += (p.sunColor[0] - r) * d0
       g += (p.sunColor[1] - g) * d0
