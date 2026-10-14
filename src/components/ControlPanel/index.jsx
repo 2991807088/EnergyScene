@@ -13,7 +13,11 @@ export default function ControlPanel({
   buildingLight,
   onBuildingLightChange,
   turbineCount,
-  onTurbineCountChange
+  onTurbineCountChange,
+  thermalGenerating,
+  onThermalGeneratingChange,
+  hydroGenerating,
+  onHydroGeneratingChange
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -106,6 +110,32 @@ export default function ControlPanel({
             <span>亮度</span>
             <span>{Math.round(buildingLight * 100)}%</span>
           </div>
+        </section>
+
+        <section className="panel__section">
+          <h3 className="panel__label">火力发电厂</h3>
+          <label className="panel__toggle">
+            <span>{thermalGenerating ? '发电中' : '已停机'}</span>
+            <input
+              type="checkbox"
+              aria-label="火力发电厂发电开关"
+              checked={thermalGenerating}
+              onChange={(e) => onThermalGeneratingChange(e.target.checked)}
+            />
+          </label>
+        </section>
+
+        <section className="panel__section">
+          <h3 className="panel__label">长江水电站</h3>
+          <label className="panel__toggle">
+            <span>{hydroGenerating ? '发电中' : '已停机'}</span>
+            <input
+              type="checkbox"
+              aria-label="长江水电站发电开关"
+              checked={hydroGenerating}
+              onChange={(e) => onHydroGeneratingChange(e.target.checked)}
+            />
+          </label>
         </section>
 
         <section className="panel__section panel__hint">

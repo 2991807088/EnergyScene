@@ -134,7 +134,7 @@ function Hall({ area, name, count = 2, solarRoof = false }) {
   const width = area.maxX - area.minX
   const depth = area.maxZ - area.minZ
   const hallW = (width - 18) / count - 4
-  const h = name === '垃圾焚烧电站' ? 15 : name === '柴油发电站' ? 9 : 11
+  const h = name === '火力发电厂' ? 15 : name === '柴油发电站' ? 9 : 11
   return <>
     <Pad area={area} />
     {Array.from({ length: count }, (_, i) => {
@@ -210,34 +210,39 @@ function TaikooLi() {
   </>
 }
 
-function PowerBuildings({ wind }) {
-  const inc = CITY_ZONES.incineration
+function PowerBuildings({ wind, thermalGenerating }) {
+  const thermal = EAST_SITES.thermal
   const diesel = CITY_ZONES.diesel
-  // 烟囱贴在厂房群南沿（朝城区一侧）：相对场区中心偏 15，随场区一起挪
-  const cz = (inc.minZ + inc.maxZ) / 2
+  // 两根烟囱随火电厂场区移动，分别落在两栋厂房屋面内。
+  const cx = (thermal.minX + thermal.maxX) / 2
+  const cz = (thermal.minZ + thermal.maxZ) / 2
   const stackZ = cz - 15
-  const sy = terrainHeight(140, cz)
+  const sy = terrainHeight(cx, cz)
+  const stacks = [cx - 10, cx + 10]
   return <>
-    <Hall area={inc} name="垃圾焚烧电站" count={2} />
-    {[126, 144].map((x) => <mesh key={x} position={[x, sy + 21, stackZ]} castShadow><cylinderGeometry args={[2.2, 2.7, 42, 12]} /><meshStandardMaterial color="#aab5ba" roughness={0.75} /></mesh>)}
-    <SmokePlume mouths={[126, 144].map((x) => ({ x, y: sy + 42, z: stackZ, radius: 2.2 }))} wind={wind} />
+    <Hall area={thermal} name="火力发电厂" count={2} />
+    {stacks.map((x) => <mesh key={x} position={[x, sy + 21, stackZ]} castShadow><cylinderGeometry args={[2.2, 2.7, 42, 12]} /><meshStandardMaterial color="#aab5ba" roughness={0.75} /></mesh>)}
+    {thermalGenerating && <SmokePlume mouths={stacks.map((x) => ({ x, y: sy + 42, z: stackZ, radius: 2.2 }))} wind={wind} />}
     <Hall area={diesel} name="柴油发电站" count={2} />
     {[112, 128, 144].map((x) => <mesh key={x} position={[x, 7, 88]} castShadow><cylinderGeometry args={[3.4, 3.4, 14, 16]} /><meshStandardMaterial color="#768992" metalness={0.45} roughness={0.47} /></mesh>)}
   </>
 }
 
-const windSpots = [26, 71, 116].flatMap((dx) => [73, 109, 145].map((z) => [EAST_SITES.wind.minX + dx, z]))
+const windSpots = Array.from({ length: 5 }, (_, col) =>
+  Array.from({ length: 4 }, (_, row) => [EAST_SITES.wind.minX + 18 + col * 34, EAST_SITES.wind.minZ + 32 + row * 34])
+).flat()
 function EastWindFarm({ wind }) {
   const rotors = useRef([])
   const spin = getTurbineSpin(wind)
   const buildingX = EAST_SITES.wind.minX + 10
+  const buildingZ = EAST_SITES.wind.minZ + 10
   useFrame((_, dt) => {
     for (const rotor of rotors.current) if (rotor) rotor.rotation.z -= spin * Math.min(dt, 0.05)
   })
   return <>
-    <Block x={buildingX} y={terrainHeight(buildingX, 56)} z={56} w={20} h={5} d={12} />
-    <FacadeWindows x={buildingX} y={terrainHeight(buildingX, 56)} z={56} width={20} depth={12} height={5} frontRows={0} />
-    <Sign name="风力电站" x={buildingX} y={terrainHeight(buildingX, 56) + 3} z={62.15} width={16} />
+    <Block x={buildingX} y={terrainHeight(buildingX, buildingZ)} z={buildingZ} w={20} h={5} d={12} />
+    <FacadeWindows x={buildingX} y={terrainHeight(buildingX, buildingZ)} z={buildingZ} width={20} depth={12} height={5} frontRows={0} />
+    <Sign name="风力电站" x={buildingX} y={terrainHeight(buildingX, buildingZ) + 3} z={buildingZ + 6.15} width={16} />
     {windSpots.map(([x, z], i) => {
       const base = terrainHeight(x, z)
       return <group key={i} position={[x, base, z]}>
@@ -253,19 +258,22 @@ function EastWindFarm({ wind }) {
   </>
 }
 
-export default function PlannedFacilities({ wind = 0 }) {
+export default function PlannedFacilities({ wind = 0, thermalGenerating = true, hydroGenerating = true }) {
   const solarBuildingX = EAST_SITES.solar.minX + 8
+  const solarBuildingZ = EAST_SITES.solar.minZ + 6
   return <>
-    <PowerBuildings wind={wind} />
-    <EastSubstation />
+    <PowerBuildings wind={wind} thermalGenerating={thermalGenerating} />
+    <EastSubstation wind={wind} thermalGenerating={thermalGenerating} hydroGenerating={hydroGenerating} />
     <TaikooLi />
     <Block x={-32} y={0} z={-100} w={22} h={5} d={0.4} material={dark} />
     <Sign name="新能源充电站" x={-32} y={3} z={-99.7} width={19} />
-    <Hall area={EAST_SITES.factoryNorth} name="工业厂房 A" count={2} solarRoof />
-    <Hall area={EAST_SITES.factorySouth} name="工业厂房 B" count={2} solarRoof />
-    <Block x={solarBuildingX} y={terrainHeight(solarBuildingX, -22)} z={-22} w={14} h={5} d={11} />
-    <FacadeWindows x={solarBuildingX} y={terrainHeight(solarBuildingX, -22)} z={-22} width={14} depth={11} height={5} frontRows={0} />
-    <Sign name="光伏电站" x={solarBuildingX} y={terrainHeight(solarBuildingX, -22) + 3} z={-16.35} width={12} />
+    <Hall area={EAST_SITES.factoryNorth} name="工业厂房 A" count={3} solarRoof />
+    <Hall area={EAST_SITES.factorySouth} name="工业厂房 B" count={3} solarRoof />
+    <Hall area={EAST_SITES.factoryRow3} name="工业厂房 C" count={3} solarRoof />
+    <Hall area={EAST_SITES.factoryRow4} name="工业厂房 D" count={3} solarRoof />
+    <Block x={solarBuildingX} y={terrainHeight(solarBuildingX, solarBuildingZ)} z={solarBuildingZ} w={14} h={5} d={11} />
+    <FacadeWindows x={solarBuildingX} y={terrainHeight(solarBuildingX, solarBuildingZ)} z={solarBuildingZ} width={14} depth={11} height={5} frontRows={0} />
+    <Sign name="光伏电站" x={solarBuildingX} y={terrainHeight(solarBuildingX, solarBuildingZ) + 3} z={solarBuildingZ + 5.65} width={12} />
     <EastWindFarm wind={wind} />
   </>
 }

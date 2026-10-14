@@ -159,7 +159,7 @@ function CamProbe() {
   return null
 }
 
-export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1, turbineCount = 48 }) {
+export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1, turbineCount = 48, thermalGenerating = true, hydroGenerating = true }) {
   const preset = useMemo(() => mergeEnvironment(mode, weather), [mode, weather])
 
   return (
@@ -191,7 +191,7 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
 
         <Buildings lightLevel={buildingLight} />
 
-        <PlannedFacilities wind={wind} />
+        <PlannedFacilities wind={wind} thermalGenerating={thermalGenerating} hydroGenerating={hydroGenerating} />
 
         <ChargingStation />
 

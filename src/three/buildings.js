@@ -28,9 +28,14 @@ const MODEL_BLOCK_RATE = 0.8
 const MODEL_KEYS = ['quatLarge', 'quatMedium', 'quatSmall']
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1)
 const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12)
-const UNIT_SPHERE = new THREE.SphereGeometry(0.5, 20, 12)
+const UNIT_PEARL_COLUMN = new THREE.CylinderGeometry(0.5, 0.5, 1, 20)
+const UNIT_SPHERE = new THREE.SphereGeometry(0.5, 32, 20)
+const UNIT_UPPER_DOME = new THREE.SphereGeometry(0.502, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2)
+const UNIT_PEARL_BELT = new THREE.SphereGeometry(0.503, 32, 6, 0, Math.PI * 2, Math.PI / 2 - 0.22, 0.44)
+const UNIT_SMALL_WINDOWS = new THREE.SphereGeometry(0.507, 48, 3, 0, Math.PI * 2, 1.10, 0.22)
 const UNIT_CONE = new THREE.ConeGeometry(0.5, 1, 12)
-const UNIT_RING = new THREE.TorusGeometry(0.5, 0.04, 8, 32)
+const UNIT_TAPER = new THREE.CylinderGeometry(0.25, 0.5, 1, 16)
+const UNIT_WINDOW_BAND = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 1, true)
 
 // 中央公园东侧的 2×3 个连续大地块；每块跨 2×2 个原有小楼格心。
 const SKYLINE_SITES = [
@@ -80,6 +85,117 @@ function makeFacade({ rand, cols, rows, wall, win, lit, litRate }) {
     tex.wrapS = THREE.RepeatWrapping
     tex.wrapT = THREE.RepeatWrapping
     return tex
+  })
+}
+
+/** 商务塔楼立面：玻璃、层间板与金属窗框分别有颜色和粗糙度。 */
+function skylineFacade({ rand, cols, rows, wall, glass, lit }) {
+  const size = 512
+  const canvases = Array.from({ length: 3 }, () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    return canvas
+  })
+  const [color, glow, roughness] = canvases.map((canvas) => canvas.getContext('2d'))
+  const cw = size / cols
+  const ch = size / rows
+  color.fillStyle = wall
+  color.fillRect(0, 0, size, size)
+  roughness.fillStyle = '#d8d8d8'
+  roughness.fillRect(0, 0, size, size)
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const x = col * cw
+      const y = row * ch
+      const litWindow = rand() < 0.18
+      const paneX = x + cw * 0.12
+      const paneY = y + ch * 0.13
+      const paneW = cw * 0.76
+      const paneH = ch * 0.66
+
+      // 暗色凹槽与窄窗框让每一层有真实厚度，底部留出层间板。
+      color.fillStyle = '#182a36'
+      color.fillRect(x + cw * 0.06, y + ch * 0.08, cw * 0.88, ch * 0.76)
+      const reflection = color.createLinearGradient(paneX, paneY, paneX + paneW, paneY + paneH)
+      reflection.addColorStop(0, litWindow ? lit : '#8caabb')
+      reflection.addColorStop(0.26, litWindow ? lit : glass)
+      reflection.addColorStop(0.64, litWindow ? '#617582' : '#18374b')
+      reflection.addColorStop(1, litWindow ? '#41515d' : '#638397')
+      color.fillStyle = reflection
+      color.fillRect(paneX, paneY, paneW, paneH)
+      color.fillStyle = 'rgba(220, 233, 238, 0.25)'
+      color.fillRect(paneX + paneW * 0.13, paneY, paneW * 0.08, paneH)
+      color.fillStyle = 'rgba(12, 30, 42, 0.55)'
+      color.fillRect(x, y + ch * 0.84, cw, ch * 0.07)
+      color.fillRect(x + cw * 0.48, paneY, cw * 0.04, paneH)
+
+      roughness.fillStyle = '#555555'
+      roughness.fillRect(paneX, paneY, paneW, paneH)
+      if (litWindow) {
+        glow.fillStyle = lit
+        glow.fillRect(paneX + 2, paneY + 2, paneW - 4, paneH - 4)
+      }
+    }
+  }
+
+  return canvases.map((canvas) => {
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = canvas === canvases[2] ? THREE.NoColorSpace : THREE.SRGBColorSpace
+    texture.anisotropy = 8
+    return texture
+  })
+}
+
+/** 观景球赤道窗带：浅色窗框包住深色玻璃，只有少数窗户在夜间发光。 */
+function pearlWindowFacade(rand) {
+  const width = 1024
+  const height = 128
+  const canvases = Array.from({ length: 2 }, () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    return canvas
+  })
+  const [color, glow] = canvases.map((canvas) => canvas.getContext('2d'))
+  color.fillStyle = '#d4d9d9'
+  color.fillRect(0, 0, width, height)
+  const windowWidth = width / 48
+  const windowHeight = height / 2
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 48; col++) {
+      const x = col * windowWidth + 2
+      const y = row * windowHeight + 7
+      const lit = rand() < 0.12
+      color.fillStyle = lit ? '#aab8b3' : '#304e5e'
+      color.fillRect(x, y, windowWidth - 4, windowHeight - 14)
+      if (lit) {
+        glow.fillStyle = '#b8c9c4'
+        glow.fillRect(x, y, windowWidth - 4, windowHeight - 14)
+      }
+    }
+  }
+  return canvases.map((canvas) => {
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 8
+    return texture
+  })
+}
+
+function skylineMaterial(facade) {
+  const [map, emissiveMap, roughnessMap] = facade
+  return new THREE.MeshPhysicalMaterial({
+    map,
+    emissiveMap,
+    roughnessMap,
+    emissive: '#ffffff',
+    emissiveIntensity: 0.32,
+    roughness: 0.72,
+    metalness: 0.28,
+    clearcoat: 0.32,
+    clearcoatRoughness: 0.2,
+    envMapIntensity: 0.85
   })
 }
 
@@ -155,7 +271,7 @@ function addFactory({ add, rand, mats, chimneyMat, bx, bz }) {
 
 /** 六个连续的大型商务地块，每座裙房占约 23×23，塔身轮廓各不相同。 */
 function addSkyline(add, mats) {
-  const { glass, pale, metal, pearl, accent, glow } = mats
+  const { glass, pale, metal, pearl, pearlRose, pearlFrame, pearlConcrete, pearlJoint, pearlShaftGlass, pearlBracket, pearlTop, pearlAntenna, pearlWindows, accent, glow } = mats
   const box = (mat, x, y, z, w, h, d) => add('box', mat, [x, y, z], [w, h, d])
   const cyl = (mat, x, y, z, diameter, h) => add('cyl', mat, [x, y, z], [diameter, h, diameter])
 
@@ -163,29 +279,77 @@ function addSkyline(add, mats) {
     box(pale, x, 2, z, 23, 4, 23)
     box(accent, x, 4.15, z, 23.5, 0.3, 23.5)
     if (kind === 'pearl') {
-      // 东方明珠式的球体观景塔：三颗观景球自下而上逐级缩小。
-      cyl(metal, x, 31, z, 2.4, 54)
-      // 三根斜撑从裙房边缘向内收拢，插入下方观景球底部。
-      for (let i = 0; i < 3; i++) {
-        const angle = (i * Math.PI * 2) / 3
-        const start = new THREE.Vector3(x + Math.cos(angle) * 8.2, 4.3, z + Math.sin(angle) * 8.2)
-        const end = new THREE.Vector3(x + Math.cos(angle) * 1.4, 15, z + Math.sin(angle) * 1.4)
+      // 下方主球由粗壮中心塔柱和三根外伸斜撑承托；中段球形节点再向塔柱回撑。
+      add('pearlColumn', pearlConcrete, [x, 10.5, z], [3.3, 13, 3.3])
+      const windowFace = Math.PI / 4
+      add('box', pearlShaftGlass,
+        [x + Math.sin(windowFace) * 1.66, 8.8, z + Math.cos(windowFace) * 1.66],
+        [0.6, 5.8, 0.1], [0, windowFace, 0])
+      const supportBeam = (material, start, end, diameter) => {
         const direction = end.clone().sub(start)
         const tilt = new THREE.Quaternion().setFromUnitVectors(
           new THREE.Vector3(0, 1, 0), direction.clone().normalize()
         )
-        add(
-          'cyl', metal, start.add(end).multiplyScalar(0.5).toArray(),
-          [1.3, direction.length(), 1.3],
-          new THREE.Euler().setFromQuaternion(tilt).toArray().slice(0, 3)
-        )
+        add('pearlColumn', material, start.clone().add(end).multiplyScalar(0.5).toArray(),
+          [diameter, direction.length(), diameter],
+          new THREE.Euler().setFromQuaternion(tilt).toArray().slice(0, 3))
       }
-      for (const [height, diameter, ringDiameter] of [[18, 11, 12.2], [36, 8, 9.2], [50, 5, 6.1]]) {
-        add('sphere', pearl, [x, height, z], [diameter, diameter, diameter])
-        add('ring', glow, [x, height, z], [ringDiameter, ringDiameter, ringDiameter], [-Math.PI / 2, 0, 0])
+      const supportAngle = -0.6
+      for (let i = 0; i < 3; i++) {
+        const angle = supportAngle + (i * Math.PI * 2) / 3
+        const start = new THREE.Vector3(x + Math.cos(angle) * 8.2, 4.3, z + Math.sin(angle) * 8.2)
+        const end = new THREE.Vector3(x + Math.cos(angle) * 2.2, 17, z + Math.sin(angle) * 2.2)
+        const joint = start.clone().lerp(end, 0.38)
+        supportBeam(pearlConcrete, start, end, 1.85)
+        add('sphere', pearlJoint, joint.toArray(), [2.45, 2.45, 2.45])
+        supportBeam(pearlConcrete, joint,
+          new THREE.Vector3(x + Math.cos(angle) * 1.2, 5.9, z + Math.sin(angle) * 1.2), 0.82)
       }
-      add('cone', accent, [x, 59, z], [3.2, 8, 3.2])
-      cyl(metal, x, 67, z, 0.48, 12)
+
+      // 两颗主球之间是三根独立立柱，中央依次悬置五颗小球。
+      for (let i = 0; i < 3; i++) {
+        const angle = supportAngle + (i * Math.PI * 2) / 3
+        cyl(pearlFrame, x + Math.cos(angle) * 2.25, 35, z + Math.sin(angle) * 2.25, 1.15, 27)
+      }
+      for (const height of [27, 31, 35, 39, 43]) {
+        add('sphere', pearl, [x, height, z], [2.3, 2.3, 2.3])
+        add('upperDome', pearlRose, [x, height, z], [2.3, 2.3, 2.3])
+        add('smallWindows', pearlWindows, [x, height, z], [2.3, 2.3, 2.3])
+        // 平台穿过球体中心，三根短支臂从中心高度接入外侧立柱。
+        cyl(pearlBracket, x, height, z, 3, 0.18)
+        for (let i = 0; i < 3; i++) {
+          const angle = supportAngle + (i * Math.PI * 2) / 3
+          const direction = new THREE.Vector3(Math.cos(angle) * 2.25, 0, Math.sin(angle) * 2.25)
+          const tilt = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize())
+          add('cyl', pearlBracket, [x + direction.x / 2, height, z + direction.z / 2],
+            [0.32, direction.length(), 0.32], new THREE.Euler().setFromQuaternion(tilt).toArray().slice(0, 3))
+        }
+      }
+
+      add('sphere', pearl, [x, 18, z], [11, 11, 11])
+      add('pearlBelt', pearlRose, [x, 18, z], [11, 11, 11])
+      add('windowBand', pearlWindows, [x, 18, z], [11.08, 1.35, 11.08])
+      add('sphere', pearl, [x, 51, z], [8, 8, 8])
+      add('upperDome', pearlRose, [x, 51, z], [8, 8, 8])
+      add('windowBand', pearlWindows, [x, 51, z], [8.08, 1.05, 8.08])
+
+      // 顶部照片中的收分塔颈、环纹小球和带两处节点的细长天线。
+      add('taper', pearlFrame, [x, 56.5, z], [2, 3, 2])
+      cyl(pearlAntenna, x, 60.9, z, 0.62, 5.8)
+      for (let height = 58.7; height < 63.5; height += 0.6) {
+        cyl(pearlBracket, x, height, z, 0.82, 0.11)
+      }
+      add('sphere', pearlTop, [x, 65, z], [2.4, 2.4, 2.4])
+      add('upperDome', pearlRose, [x, 65, z], [2.4, 2.4, 2.4])
+      for (const height of [64.8, 65.25]) {
+        cyl(pearlAntenna, x, height, z, 2.42, 0.14)
+      }
+      cyl(pearlAntenna, x, 68.1, z, 0.42, 3.9)
+      cyl(pearlAntenna, x, 70.1, z, 0.9, 0.28)
+      cyl(pearlAntenna, x, 73.1, z, 0.27, 6)
+      cyl(pearlAntenna, x, 76.15, z, 0.7, 0.23)
+      cyl(pearlAntenna, x, 79.7, z, 0.13, 7)
+      cyl(pearlAntenna, x, 83.5, z, 0.055, 1.1)
     } else if (kind === 'setback') {
       // 层层收分的玻璃办公塔。
       box(glass, x, 16, z, 19, 24, 18)
@@ -225,7 +389,7 @@ function addSkyline(add, mats) {
 export function generateCity(seed = 20261012) {
   const rand = mulberry32(seed)
   const skylineRand = mulberry32(seed ^ 0x5a17)
-  const geometries = { box: UNIT_BOX, cyl: UNIT_CYL, sphere: UNIT_SPHERE, cone: UNIT_CONE, ring: UNIT_RING }
+  const geometries = { box: UNIT_BOX, cyl: UNIT_CYL, pearlColumn: UNIT_PEARL_COLUMN, sphere: UNIT_SPHERE, upperDome: UNIT_UPPER_DOME, pearlBelt: UNIT_PEARL_BELT, smallWindows: UNIT_SMALL_WINDOWS, cone: UNIT_CONE, taper: UNIT_TAPER, windowBand: UNIT_WINDOW_BAND }
 
   // ---- 各类型配色变体 ----
   const residentialMats = [
@@ -283,11 +447,21 @@ export function generateCity(seed = 20261012) {
     roughness: 0.35,
     metalness: 0.1
   })
+  const pearlWindows = pearlWindowFacade(skylineRand)
   const skylineMats = {
-    glass: boxFaces(wallMaterial(makeFacade({ rand: skylineRand, cols: 8, rows: 16, wall: '#365a72', win: '#183043', lit: ['#9bd9f0', '#d9f4ff'], litRate: 0.5 }), 0.45, 0.27, 0.65), roofMaterial('#547187')),
-    pale: boxFaces(wallMaterial(makeFacade({ rand: skylineRand, cols: 7, rows: 14, wall: '#a4c0c9', win: '#406177', lit: ['#ddf3ff', '#b8e7ee'], litRate: 0.42 }), 0.35, 0.36, 0.4), roofMaterial('#87a2ab')),
+    glass: boxFaces(skylineMaterial(skylineFacade({ rand: skylineRand, cols: 8, rows: 16, wall: '#547285', glass: '#284a62', lit: '#a3c7d4' })), roofMaterial('#485f6d', 0.56, 0.36)),
+    pale: boxFaces(skylineMaterial(skylineFacade({ rand: skylineRand, cols: 7, rows: 14, wall: '#aab9b9', glass: '#54788b', lit: '#d9cfb3' })), roofMaterial('#899d9f', 0.62, 0.28)),
     metal: new THREE.MeshStandardMaterial({ color: '#b5c1c9', roughness: 0.3, metalness: 0.72 }),
-    pearl: new THREE.MeshStandardMaterial({ color: '#bb86ad', emissive: '#6a294d', emissiveIntensity: 0.28, roughness: 0.28, metalness: 0.62 }),
+    pearl: new THREE.MeshStandardMaterial({ color: '#b5b8b7', roughness: 1, metalness: 0 }),
+    pearlRose: new THREE.MeshStandardMaterial({ color: '#a96785', roughness: 1, metalness: 0 }),
+    pearlFrame: new THREE.MeshStandardMaterial({ color: '#b5c4ca', roughness: 0.9, metalness: 0 }),
+    pearlConcrete: new THREE.MeshStandardMaterial({ color: '#899391', roughness: 1, metalness: 0 }),
+    pearlJoint: new THREE.MeshStandardMaterial({ color: '#b4bec0', roughness: 0.92, metalness: 0 }),
+    pearlShaftGlass: new THREE.MeshStandardMaterial({ color: '#213d49', roughness: 0.72, metalness: 0 }),
+    pearlBracket: new THREE.MeshStandardMaterial({ color: '#849198', roughness: 1, metalness: 0 }),
+    pearlTop: new THREE.MeshStandardMaterial({ color: '#8297a8', roughness: 0.9, metalness: 0 }),
+    pearlAntenna: new THREE.MeshStandardMaterial({ color: '#4b657d', roughness: 0.85, metalness: 0 }),
+    pearlWindows: new THREE.MeshStandardMaterial({ map: pearlWindows[0], emissiveMap: pearlWindows[1], emissive: '#ffffff', emissiveIntensity: 0.35, roughness: 0.85, metalness: 0 }),
     accent: new THREE.MeshStandardMaterial({ color: '#80a8b4', roughness: 0.3, metalness: 0.58 }),
     glow: new THREE.MeshStandardMaterial({ color: '#b6eaff', emissive: '#83d9f5', emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.28 })
   }
@@ -324,7 +498,7 @@ export function generateCity(seed = 20261012) {
 
   const lightMaterials = [...residentialMats, ...mallMats, ...factoryMats]
     .map((faces) => faces[0])
-    .concat(signMat, skylineMats.glass[0], skylineMats.pale[0], skylineMats.pearl, skylineMats.glow)
+    .concat(signMat, skylineMats.glass[0], skylineMats.pale[0], skylineMats.pearlWindows, skylineMats.glow)
     .map((material) => ({ material, baseIntensity: material.emissiveIntensity }))
 
   return { meshes, geometries, lightMaterials, modelSites }

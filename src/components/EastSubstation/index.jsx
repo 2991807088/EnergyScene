@@ -1,6 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildEastSubstation } from '@/three/eastSubstation'
+import { getTurbineSpin } from '@/three/environments'
+import PowerFlow from './PowerFlow'
 
 const GEOMETRIES = {
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -19,8 +21,8 @@ function EquipmentBatch({ batch }) {
   return <instancedMesh ref={ref} args={[GEOMETRIES[batch.kind], batch.material, batch.matrices.length]} castShadow receiveShadow />
 }
 
-export default function EastSubstation() {
-  const { batches, wireGeometry, fenceGeometry } = useMemo(() => {
+export default function EastSubstation({ wind = 0, thermalGenerating = true, hydroGenerating = true }) {
+  const { batches, wireGeometry, fenceGeometry, flowLines } = useMemo(() => {
     const { parts, ...geometry } = buildEastSubstation()
     const batches = []
     for (const part of parts) {
@@ -33,10 +35,19 @@ export default function EastSubstation() {
     }
     return { batches, ...geometry }
   }, [])
+  const solarFlow = useMemo(() => flowLines.filter((line) => line.key === 'solar'), [flowLines])
+  const windFlow = useMemo(() => flowLines.filter((line) => line.key === 'wind'), [flowLines])
+  const thermalFlow = useMemo(() => flowLines.filter((line) => line.key === 'thermal'), [flowLines])
+  const hydroFlow = useMemo(() => flowLines.filter((line) => line.key === 'hydro'), [flowLines])
+  const windActive = getTurbineSpin(wind) > 0
   return (
     <group>
       {batches.map((batch, i) => <EquipmentBatch key={i} batch={batch} />)}
       <mesh geometry={wireGeometry} material={WIRE_MATERIAL} />
+      <PowerFlow lines={solarFlow} />
+      {windActive && <PowerFlow lines={windFlow} />}
+      {thermalGenerating && !windActive && <PowerFlow lines={thermalFlow} />}
+      {hydroGenerating && <PowerFlow lines={hydroFlow} />}
       <lineSegments geometry={fenceGeometry} material={FENCE_MATERIAL} />
     </group>
   )

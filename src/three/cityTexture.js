@@ -70,7 +70,7 @@ export function createCityTexture(size = 4096) {
       const d = bottom.coordinate - bottom.width / 2 - 0.25 - z
       const zone = cityZone(x + w / 2, z + d / 2)
       const color = zone === 'business' ? '#8f9da5' : zone === 'mall' ? '#aab0ac' :
-        ['incineration', 'diesel', 'substation', 'charging'].includes(zone) ? '#929b9a' :
+        ['diesel', 'substation', 'charging'].includes(zone) ? '#929b9a' :
           plots[Math.floor(rand() * plots.length)]
       rect(x, z, w, d, color)
       if (w > 20 && d > 20) rect(x + 1, z + 1, w - 2, 1.5, '#6b805d')

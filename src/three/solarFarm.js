@@ -46,9 +46,9 @@ const FOOT_GRID = [-1, 0, 1]
 
 /** 东侧独立光伏用地。 */
 const EDGE_WIDTH = 132
-const EDGE_DEPTH = 58
+const EDGE_DEPTH = 94
 const EDGE_COLS = Math.round(EDGE_WIDTH / 5.8)
-const EDGE_ROWS = 11
+const EDGE_ROWS = 17
 // 间距由跨度反算，让最外侧支架与城区两侧边界对齐。
 const EDGE_COL_PITCH = (EDGE_WIDTH - SOLAR_TABLE.width) / (EDGE_COLS - 1)
 // 一张支架沿 z 的占地 = 斜面在水平面的投影
@@ -56,7 +56,7 @@ const EDGE_ROW_PITCH = (EDGE_DEPTH - TABLE_HALF_Z * 2) / (EDGE_ROWS - 1)
 
 const FARM_EDGE = {
   cx: (EAST_SITES.solar.minX + EAST_SITES.solar.maxX) / 2,
-  cz: (EAST_SITES.solar.minZ + EAST_SITES.solar.maxZ) / 2,
+  cz: (EAST_SITES.solar.minZ + EAST_SITES.solar.maxZ) / 2 + 6,
   yaw: Math.PI, // 行列对齐城市网格；面板往 -z 斜（太阳的 z 分量在 -z 侧）
   rows: EDGE_ROWS,
   cols: EDGE_COLS,
@@ -71,8 +71,8 @@ const FARM_CONFIGS = [FARM_EDGE]
 export const EDGE_FARM_SPAN = {
   x: EDGE_WIDTH,
   z: EDGE_DEPTH,
-  nearZ: EAST_SITES.solar.minZ,
-  farZ: EAST_SITES.solar.maxZ,
+  nearZ: FARM_EDGE.cz - EDGE_DEPTH / 2,
+  farZ: FARM_EDGE.cz + EDGE_DEPTH / 2,
   depth: EDGE_DEPTH
 }
 

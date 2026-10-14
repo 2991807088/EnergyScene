@@ -1,5 +1,5 @@
 // ============================================================
-//  东缘大型变电站 + 风电 / 光伏 / 水电 高压进线
+//  东缘大型变电站 + 风电 / 光伏 / 火电 / 水电高压进线
 //
 //  落点：CITY_ZONES.substation（城市东缘，x164..236 / z-56..56 的场区），
 //  与上一轮「变电站贴城市边缘」的布置一致，改动该常量即可整体平移。
@@ -8,18 +8,24 @@
 //  gantry 进线门架 / insulator 套管），但全部用世界坐标（不再叠加
 //  GRID_OFFSET），因为本组件直接在场景里按世界坐标渲染。
 //
-//  三路进线：
-//    · wind  —— 东缘风力电站（EAST_SITES.wind）西行进站
+//  三条架空通道、四个电源：
+//    · wind / thermal —— 风电与火电共用东侧主线
 //    · solar —— 东缘光伏电站（EAST_SITES.solar）西行进站
-//    · hydro —— 长江水电站出线塔（西岸，x≈-266）横跨城区进站
+//    · hydro —— 长江水电站出线塔沿西、南城界绕行进站
 // ============================================================
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { terrainHeight } from './terrain'
-import { CITY_ZONES } from './cityLayout'
+import { CITY_HALF, CITY_ZONES, EAST_SITES } from './cityLayout'
 import { OUTLINE_TOWER } from './hydropower'
 
 const area = CITY_ZONES.substation
+const outsideCity = CITY_HALF + 18 // 铁塔横担也留在城区地面外
+const windStationX = EAST_SITES.wind.minX + 10
+const windStationZ = EAST_SITES.wind.minZ + 10
+const solarStationX = EAST_SITES.solar.minX + 8
+const solarStationZ = EAST_SITES.solar.minZ + 6
+const thermal = EAST_SITES.thermal
 const lerp = (a, b, t) => a + (b - a) * t
 
 function material(color, metalness = 0.25, roughness = 0.7) {
@@ -46,14 +52,12 @@ function labelMaterial(text) {
   return new THREE.MeshBasicMaterial({ map })
 }
 
-// 三路进线的折线（世界坐标）。末段贴近站区边缘，由最后一座铁塔接到进线门架。
+// 风/火共用一列铁塔；风电线路第二塔旁接入火电。前两路只在指定点立塔。
 export const EAST_GRID_ROUTES = [
-  // 东缘风机汇集后西行进站
-  { key: 'wind', points: [[370, 120], [322, 88], [276, 56], [240, 34]] },
-  // 东缘光伏阵西行进站
-  { key: 'solar', points: [[340, -20], [300, -12], [262, -6], [240, -14]] },
-  // 长江水电站出线塔横跨城区进站
-  { key: 'hydro', points: [[OUTLINE_TOWER.x, OUTLINE_TOWER.z], [-200, 112], [-130, 82], [-60, 54], [20, 30], [100, 12], [178, 4]] }
+  { key: 'wind', points: [[310, windStationZ - 34], [300, thermal.maxZ - 12], [282, 160], [268, 68], [240, 18]], fixedTowers: true },
+  { key: 'solar', points: [[310, 40], [270, 4], [240, -18]], fixedTowers: true },
+  // 水电改走城区另一侧，避免与风/火主线在东侧并排。
+  { key: 'hydro', points: [[OUTLINE_TOWER.x, OUTLINE_TOWER.z], [-outsideCity, -outsideCity], [outsideCity, -outsideCity], [outsideCity, -70], [200, -70]], towerSpacing: 95 }
 ]
 
 export function buildEastSubstation() {
@@ -69,6 +73,7 @@ export function buildEastSubstation() {
   const parts = []
   const linePoints = []
   const wires = []
+  const flowLines = []
   const matrix = new THREE.Matrix4()
   const quaternion = new THREE.Quaternion()
   const up = new THREE.Vector3(0, 1, 0)
@@ -171,9 +176,9 @@ export function buildEastSubstation() {
     return sockets
   }
   const terminals = {
-    wind: gantry(area.maxX - 10, 18, 0, '风电进线'),
+    wind: gantry(area.maxX - 10, 18, 0, '风火进线'),
     solar: gantry(area.maxX - 10, -18, 0, '光伏进线'),
-    hydro: gantry(area.minX + 10, 2, Math.PI, '水电进线')
+    hydro: gantry(200, area.minZ + 12, 0, '水电进线')
   }
 
   function pylon(x, z, angle) {
@@ -216,39 +221,100 @@ export function buildEastSubstation() {
         THREE.MathUtils.lerp(a[2], b[2], t)
       )
     })
-    wires.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(samples), 24, radius, 5, false))
+    const curve = new THREE.CatmullRomCurve3(samples)
+    wires.push(new THREE.TubeGeometry(curve, 24, radius, 5, false))
+    return curve
   }
 
   // 门架 → 母排，主变 → 母排
   for (const [key, sockets] of Object.entries(terminals)) {
-    const gz = key === 'wind' ? 18 : key === 'solar' ? -18 : 2
+    const gz = key === 'wind' ? 18 : key === 'solar' ? -18 : -44
     sockets.forEach((socket, phase) => cable(socket, [busPhaseX[phase], floorY + 7, gz], 0.08))
   }
   for (const tz of [-14, 14]) {
     [-2.2, 0, 2.2].forEach((dx, phase) => cable([cx - 18 + dx, floorY + 6.5, tz - 1.3], [busPhaseX[phase], floorY + 7, tz], 0.08))
   }
 
-  // 各路进线：沿折线布铁塔，三相线逐级相连，源头放集电柜
+  // 各路进线：主线只在转向和必要的长跨距处立塔。
   for (const route of EAST_GRID_ROUTES) {
-    const towerPoints = []
-    for (let i = 0; i < route.points.length - 1; i++) {
-      const a = route.points[i]
-      const b = route.points[i + 1]
-      const count = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 55)
-      for (let j = 0; j < count; j++) towerPoints.push([lerp(a[0], b[0], j / count), lerp(a[1], b[1], j / count)])
+    const routePhases = [0, 1, 2].map((phase) => ({ key: route.key, phase, segments: [], length: 0 }))
+    const towerPoints = route.fixedTowers ? route.points.slice(0, -1) : []
+    if (!route.fixedTowers) {
+      for (let i = 0; i < route.points.length - 1; i++) {
+        const a = route.points[i]
+        const b = route.points[i + 1]
+        const count = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / route.towerSpacing)
+        for (let j = 0; j < count; j++) towerPoints.push([lerp(a[0], b[0], j / count), lerp(a[1], b[1], j / count)])
+      }
     }
     const sockets = towerPoints.map((point, i) => {
       const next = towerPoints[i + 1] ?? route.points.at(-1)
       return pylon(point[0], point[1], Math.atan2(next[0] - point[0], next[1] - point[1]))
     })
     sockets.push(terminals[route.key])
+    if (route.key === 'wind') {
+      const roofY = terrainHeight(windStationX, windStationZ) + 5
+      box(steel, [windStationX, roofY + 0.2, windStationZ], [9, 0.4, 2])
+      for (let phase = 0; phase < 3; phase++) {
+        const x = windStationX + (phase - 1) * 3.4
+        insulator(x, roofY + 0.4, windStationZ, 1.8)
+        const curve = cable([x, roofY + 2.2, windStationZ], sockets[0][phase])
+        const length = curve.getLength()
+        routePhases[phase].segments.push({ curve, start: 0, length })
+        routePhases[phase].length = length
+      }
+    }
     for (let i = 0; i < sockets.length - 1; i++) {
-      for (let phase = 0; phase < 3; phase++) cable(sockets[i][phase], sockets[i + 1][phase])
+      for (let phase = 0; phase < 3; phase++) {
+        const line = routePhases[phase]
+        const curve = cable(sockets[i][phase], sockets[i + 1][phase])
+        const length = curve.getLength()
+        line.segments.push({ curve, start: line.length, length })
+        line.length += length
+      }
+    }
+    flowLines.push(...routePhases)
+    if (route.key === 'wind') {
+      // 火电贴地接入第二塔，后半段复用风电的实体导线与铁塔。
+      const [x, z] = towerPoints[1]
+      const y = terrainHeight(x, z)
+      box(concrete, [x + 4, y + 0.2, z], [3.6, 0.6, 3.5])
+      box(transformer, [x + 4, y + 1.7, z], [2.8, 2.8, 2.7])
+      const feederStart = [thermal.minX + 8, thermal.maxZ - 12]
+      const feeder = Array.from({ length: 17 }, (_, i) => {
+        const t = i / 16
+        const px = lerp(feederStart[0], x + 4, t)
+        const pz = lerp(feederStart[1], z, t)
+        return new THREE.Vector3(px, terrainHeight(px, pz) + 0.3, pz)
+      })
+      wires.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(feeder), 24, 0.12, 5, false))
+      flowLines.push(...routePhases.map((line) => {
+        let length = 0
+        const segments = line.segments.slice(2).map((segment) => {
+          const shared = { curve: segment.curve, start: length, length: segment.length }
+          length += segment.length
+          return shared
+        })
+        return { key: 'thermal', phase: line.phase, segments, length }
+      }))
     }
     const [x, z] = route.points[0]
     const y = terrainHeight(x, z)
-    box(concrete, [x + 4, y + 0.2, z], [3.6, 0.6, 3.5])
-    box(transformer, [x + 4, y + 1.7, z], [2.8, 2.8, 2.7])
+    if (route.key !== 'wind') {
+      box(concrete, [x + 4, y + 0.2, z], [3.6, 0.6, 3.5])
+      box(transformer, [x + 4, y + 1.7, z], [2.8, 2.8, 2.7])
+    }
+    const feederStart = route.key === 'solar' ? [solarStationX, solarStationZ + 5.7] : null
+    if (feederStart) {
+      // 电站厂房正面经贴地电缆接首塔集电柜，架空线不跨建筑。
+      const points = Array.from({ length: 17 }, (_, i) => {
+        const t = i / 16
+        const px = lerp(feederStart[0], x + 4, t)
+        const pz = lerp(feederStart[1], z, t)
+        return new THREE.Vector3(px, terrainHeight(px, pz) + 0.3, pz)
+      })
+      wires.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 24, 0.12, 5, false))
+    }
   }
 
   // 站区围栏（南侧留门，朝向城区）
@@ -272,5 +338,5 @@ export function buildEastSubstation() {
   wires.forEach((geometry) => geometry.dispose())
   const fenceGeometry = new THREE.BufferGeometry()
   fenceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePoints, 3))
-  return { parts, wireGeometry, fenceGeometry }
+  return { parts, wireGeometry, fenceGeometry, flowLines }
 }

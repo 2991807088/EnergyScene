@@ -61,7 +61,8 @@ export function isFakeInteriorMaterial(material) {
  */
 export function bakeBuildingModel(srcScene, spec) {
   const root = new THREE.Object3D()
-  root.add(srcScene.clone(true))
+  const model = srcScene.clone(true)
+  root.add(model)
   root.updateMatrixWorld(true)
 
   const box = new THREE.Box3().setFromObject(root)
@@ -74,7 +75,8 @@ export function bakeBuildingModel(srcScene, spec) {
 
   const scaled = new THREE.Box3().setFromObject(root)
   const center = scaled.getCenter(new THREE.Vector3())
-  root.position.set(-center.x, -scaled.min.y, -center.z)
+  // 把居中偏移留在模型内部；实例的 root 坐标用于街区定位和旋转。
+  model.position.add(new THREE.Vector3(-center.x, -scaled.min.y, -center.z).divideScalar(scale))
   root.updateMatrixWorld(true)
 
   root.traverse((o) => {

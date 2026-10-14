@@ -9,6 +9,8 @@ export default function App() {
   const [wind, setWind] = useState(2)
   const [buildingLight, setBuildingLight] = useState(1)
   const [turbineCount, setTurbineCount] = useState(48)
+  const [thermalGenerating, setThermalGenerating] = useState(true)
+  const [hydroGenerating, setHydroGenerating] = useState(true)
 
   return (
     <div className="app">
@@ -19,6 +21,8 @@ export default function App() {
           wind={wind}
           buildingLight={buildingLight}
           turbineCount={turbineCount}
+          thermalGenerating={thermalGenerating}
+          hydroGenerating={hydroGenerating}
         />
         <ControlPanel
           timeOfDay={timeOfDay}
@@ -31,6 +35,10 @@ export default function App() {
           onBuildingLightChange={setBuildingLight}
           turbineCount={turbineCount}
           onTurbineCountChange={setTurbineCount}
+          thermalGenerating={thermalGenerating}
+          onThermalGeneratingChange={setThermalGenerating}
+          hydroGenerating={hydroGenerating}
+          onHydroGeneratingChange={setHydroGenerating}
         />
       </main>
     </div>

@@ -46,11 +46,9 @@ export function isInsideTrack(x, z, margin = 0) {
 
 export const PARK_AREAS = []
 // 规划图的左侧主城：五列、五行；东侧另设两块工厂及风光电站。
-// 垃圾焚烧电站顶北缘（z -236..-180）、变电站顶东缘（x 164..236）——
-// 两处污染/高压场站贴城市边缘布置，住宅街区避开场站占地。
+// 变电站顶东缘（x 164..236），火力发电厂位于光伏区旁的城外用地。
 export const CITY_ZONES = {
   charging: { minX: -92, maxX: 28, minZ: -156, maxZ: -100 },
-  incineration: { minX: 36, maxX: 156, minZ: -236, maxZ: -180 },
   park: CENTRAL_PARK,
   mall: { minX: -92, maxX: -36, minZ: 36, maxZ: 92 },
   business: { minX: -28, maxX: 28, minZ: -92, maxZ: 92 },
@@ -60,11 +58,19 @@ export const CITY_ZONES = {
 
 const EAST_SITE_MIN_X = GROUND_SIZE / 2 + 80
 const EAST_SITE_MAX_X = EAST_SITE_MIN_X + 142
+const SOLAR_SITE = { minX: EAST_SITE_MIN_X, maxX: EAST_SITE_MAX_X, minZ: 46, maxZ: 156 }
+const THERMAL_MIN_Z = SOLAR_SITE.maxZ + 10
 export const EAST_SITES = {
-  factoryNorth: { minX: EAST_SITE_MIN_X, maxX: EAST_SITE_MAX_X, minZ: -156, maxZ: -101 },
-  factorySouth: { minX: EAST_SITE_MIN_X, maxX: EAST_SITE_MAX_X, minZ: -93, maxZ: -38 },
-  solar: { minX: EAST_SITE_MIN_X, maxX: EAST_SITE_MAX_X, minZ: -30, maxZ: 38 },
-  wind: { minX: EAST_SITE_MIN_X, maxX: EAST_SITE_MAX_X, minZ: 46, maxZ: 156 }
+  thermal: {
+    minX: SOLAR_SITE.minX, maxX: SOLAR_SITE.maxX,
+    minZ: THERMAL_MIN_Z, maxZ: THERMAL_MIN_Z + SOLAR_SITE.maxZ - SOLAR_SITE.minZ
+  },
+  factoryNorth: { minX: 300, maxX: 490, minZ: -470, maxZ: -405 },
+  factorySouth: { minX: 300, maxX: 490, minZ: -395, maxZ: -330 },
+  factoryRow3: { minX: 300, maxX: 490, minZ: -320, maxZ: -255 },
+  factoryRow4: { minX: 300, maxX: 490, minZ: -245, maxZ: -180 },
+  solar: SOLAR_SITE,
+  wind: { minX: 330, maxX: 498, minZ: 350, maxZ: 498 }
 }
 export const inArea = (x, z, area, margin = 0) =>
   x >= area.minX - margin && x <= area.maxX + margin &&

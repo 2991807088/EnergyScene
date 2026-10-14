@@ -51,6 +51,11 @@ export function riverCenterX(z) {
   return RIVER.xRef + 14 * Math.sin((z - 60) / 235) + 5 * Math.sin((z + 120) / 88)
 }
 
+/** 河心线切线：水纹随弯曲河道向南流，而不是始终平行 z 轴 */
+function riverFlowX(z) {
+  return (14 / 235) * Math.cos((z - 60) / 235) + (5 / 88) * Math.cos((z + 120) / 88)
+}
+
 /** 水面半宽：山间窄、平原宽 */
 export function riverHalfWidth(z) {
   return 20 + 9 * smoothstep01((z - RIVER.zFrom) / 520)
@@ -112,6 +117,7 @@ export function buildRiverSurface({ fromZ, toZ, step = 4, across = 7 }) {
   const positions = []
   const normals = []
   const crosses = []
+  const flows = []
   const indices = []
 
   for (let i = 0; i <= rows; i++) {
@@ -122,6 +128,7 @@ export function buildRiverSurface({ fromZ, toZ, step = 4, across = 7 }) {
       positions.push(centerX + t * halfWidth, water, z)
       normals.push(0, 1, 0)
       crosses.push(t)
+      flows.push(riverFlowX(z), 1)
     }
   }
   for (let i = 0; i < rows; i++) {
@@ -138,6 +145,7 @@ export function buildRiverSurface({ fromZ, toZ, step = 4, across = 7 }) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geometry.setAttribute('aCross', new THREE.Float32BufferAttribute(crosses, 1))
+  geometry.setAttribute('aFlow', new THREE.Float32BufferAttribute(flows, 2))
   geometry.setIndex(indices)
   geometry.computeBoundingSphere()
   return geometry
@@ -152,29 +160,30 @@ export function buildRiverSurface({ fromZ, toZ, step = 4, across = 7 }) {
 
 const RIVER_VERT_HEAD = /* glsl */ `
 uniform float uTime;
-uniform vec2 uFlowDirection;
 uniform float uFlowSpeed;
 uniform float uWaveAmp;
 attribute float aCross;
+attribute vec2 aFlow;
 varying vec3 vRiverWorld;
 varying float vCross;
+varying vec2 vRiverFlow;
 `
 
 const RIVER_VERT_BODY = /* glsl */ `
-  vec2 riverFlow = normalize(uFlowDirection);
+  vec2 riverFlow = normalize(aFlow);
   vec3 riverWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
   float riverSwell =
-      sin(dot(riverWorld.xz, riverFlow) * 0.055 + uTime * uFlowSpeed * 1.05)
+      sin(dot(riverWorld.xz, riverFlow) * 0.055 - uTime * uFlowSpeed * 1.05)
     + 0.55 * sin(dot(riverWorld.xz, riverFlow) * 0.13 - uTime * uFlowSpeed * 1.6)
-    + 0.30 * sin(dot(riverWorld.xz, vec2(-riverFlow.y, riverFlow.x)) * 0.19 + uTime * uFlowSpeed * 0.75);
+    + 0.30 * sin(dot(riverWorld.xz, riverFlow * 0.35 + vec2(-riverFlow.y, riverFlow.x)) * 0.19 - uTime * uFlowSpeed * 0.75);
   transformed.y += riverSwell * uWaveAmp;
   vRiverWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
   vCross = aCross;
+  vRiverFlow = riverFlow;
 `
 
 const RIVER_FRAG_HEAD = /* glsl */ `
 uniform float uTime;
-uniform vec2 uFlowDirection;
 uniform float uFlowSpeed;
 uniform float uWaveScale;
 uniform float uNormalStrength;
@@ -182,6 +191,7 @@ uniform vec4 uFoam;      // x: 岸边浪花强度, y: 消力池中心 z, z: 影�
 uniform vec3 uFoamColor;
 varying vec3 vRiverWorld;
 varying float vCross;
+varying vec2 vRiverFlow;
 
 float riverHash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -208,7 +218,7 @@ float riverFbm(vec2 p) {
 // 末尾再乘一层低频噪声做相位打散：纯正弦叠加会出现规则的横条纹，
 // 一眼就看出是数学公式而不是水。
 vec3 riverWaterNormal(vec2 p, float t) {
-  vec2 d0 = normalize(uFlowDirection);
+  vec2 d0 = normalize(vRiverFlow);
   vec2 d1 = vec2(-d0.y, d0.x);
   vec2 d2 = normalize(d0 * 0.75 + d1 * 0.66);
   vec2 d3 = normalize(d0 * 0.62 - d1 * 0.78);
@@ -217,22 +227,22 @@ vec3 riverWaterNormal(vec2 p, float t) {
   float nz = 0.0;
   float phase = 0.0;
 
-  phase = dot(p, d0) * 0.32 + t * 1.45;
+  phase = dot(p, d0) * 0.32 - t * 1.45;
   nx += cos(phase) * d0.x; nz += cos(phase) * d0.y;
-  phase = dot(p, d1) * 0.85 - t * 0.62 + 1.7;
+  phase = dot(p, d1 * 0.85 + d0 * 0.18) - t * 0.62 + 1.7;
   nx += 0.5 * cos(phase) * d1.x; nz += 0.5 * cos(phase) * d1.y;
-  phase = dot(p, d2) * 1.75 + t * 2.35 + 3.1;
+  phase = dot(p, d2) * 1.75 - t * 2.35 + 3.1;
   nx += 0.3 * cos(phase) * d2.x; nz += 0.3 * cos(phase) * d2.y;
   phase = dot(p, d3) * 3.6 - t * 3.1 + 5.0;
   nx += 0.16 * cos(phase) * d3.x; nz += 0.16 * cos(phase) * d3.y;
 
   float e = 0.4;
-  vec2 q = p * 0.85 + d0 * t * 1.7;
+  vec2 q = p * 0.85 - d0 * t * 1.7;
   float n0 = riverFbm(q);
   nx += (riverFbm(q + vec2(e, 0.0)) - n0) * 2.4;
   nz += (riverFbm(q + vec2(0.0, e)) - n0) * 2.4;
 
-  float scramble = 1.0 + 0.75 * (riverFbm(p * 0.09 + d0 * t * 0.3) - 0.5);
+  float scramble = 1.0 + 0.75 * (riverFbm(p * 0.09 - d0 * t * 0.3) - 0.5);
   nx *= scramble;
   nz *= scramble;
 
@@ -241,19 +251,20 @@ vec3 riverWaterNormal(vec2 p, float t) {
 
 // 白沫：岸边浪花 + 坝下消力池湍流
 float riverFoamMask(vec3 w, float crossT, float t) {
-  vec2 d0 = normalize(uFlowDirection);
+  vec2 d0 = normalize(vRiverFlow);
   vec2 d1 = vec2(-d0.y, d0.x);
 
   float edgeDist = min(crossT * 0.5 + 0.5, 0.5 - crossT * 0.5); // 0 岸边 → 0.5 河心
-  float streak = riverFbm(w.xz * 0.36 + d0 * t * 2.6);
-  float chop = riverFbm(w.xz * 0.95 + d1 * t * 1.5);
+  float streak = riverFbm(w.xz * 0.36 - d0 * t * 2.6);
+  float chop = riverFbm(w.xz * 0.95 - d0 * t * 1.5 + d1 * 1.7);
   float shore = uFoam.x * (1.0 - smoothstep(0.012, 0.1, edgeDist)) * (0.42 + 0.72 * streak);
 
   float d = (w.z - uFoam.y) / max(uFoam.z, 0.001);
   float plunge = step(0.0, w.z - uFoam.y) * uFoam.w * exp(-d * d * 1.5);
   plunge *= 0.4 + 0.95 * chop;
 
-  return shore + plunge;
+  float drift = uFoam.x * 0.12 * smoothstep(0.58, 0.72, streak) * smoothstep(0.04, 0.18, edgeDist);
+  return shore + plunge + drift;
 }
 `
 
@@ -263,7 +274,7 @@ const RIVER_FRAG_BODY = /* glsl */ `
   vec3 riverN = riverWaterNormal(vRiverWorld.xz, uTime * uFlowSpeed);
   normal = normalize(mix(normal, normalize(mat3(viewMatrix) * riverN), uNormalStrength));
   // 水色深浅：一层低速漂移的噪声，做出水下起伏与流势
-  float riverTone = riverFbm(vRiverWorld.xz * 0.055 + normalize(uFlowDirection) * uTime * uFlowSpeed * 0.32);
+  float riverTone = riverFbm(vRiverWorld.xz * 0.055 - normalize(vRiverFlow) * uTime * uFlowSpeed * 0.32);
   diffuseColor.rgb *= 0.82 + 0.36 * riverTone;
   float riverFoam = clamp(riverFoamMask(vRiverWorld, vCross, uTime * uFlowSpeed), 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, uFoamColor, riverFoam);
@@ -281,7 +292,6 @@ export function createRiverMaterial({
   metalness = 0.02,
   envMapIntensity = 1.25,
   flowSpeed = 1,
-  flowDirection = [0, 1],
   waveAmp = 0.16,
   waveScale = 0.85,
   normalStrength = 1,
@@ -292,7 +302,6 @@ export function createRiverMaterial({
 } = {}) {
   const uniforms = {
     uTime: { value: 0 },
-    uFlowDirection: { value: new THREE.Vector2(flowDirection[0], flowDirection[1]) },
     uFlowSpeed: { value: flowSpeed },
     uWaveAmp: { value: waveAmp },
     uWaveScale: { value: waveScale },

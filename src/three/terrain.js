@@ -90,12 +90,13 @@ function fbm(x, y, seed, octaves) {
  * 地形高度场。
  * @returns {number} 该点的地面高度（城区内恒为 0）
  */
-const EAST_AREAS = [EAST_SITES.factoryNorth, EAST_SITES.factorySouth]
+const EAST_AREAS = [EAST_SITES.thermal, EAST_SITES.factoryNorth, EAST_SITES.factorySouth, EAST_SITES.factoryRow3, EAST_SITES.factoryRow4]
+const EAST_AREAS_MIN_X = Math.min(...EAST_AREAS.map((site) => site.minX))
 
 export function terrainHeight(x, z) {
   const h = naturalHeight(x, z)
-  if (x < EAST_SITES.wind.minX - 14) return riverCarve(x, z, h)
-  // 仅厂房用地需要平整；风机和光伏阵列直接落在自然低丘上。
+  if (x < EAST_AREAS_MIN_X - 14) return riverCarve(x, z, h)
+  // 厂房用地需要平整；风机和光伏阵列直接落在自然低丘上。
   let distance = Infinity
   for (const site of EAST_AREAS) {
     distance = Math.min(distance, Math.hypot(
