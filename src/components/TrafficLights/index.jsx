@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { SIGNAL_JUNCTIONS, verticalRoadX, horizontalRoadZ } from '@/three/cityLayout'
 import { signalAt, intensityFor } from '@/three/traffic'
+import { CHARGING, CHARGING_OFFSET } from '@/three/chargingStation'
 
 const LIGHT_COLORS = {
   green: '#57e07a',
@@ -150,8 +151,20 @@ const CORNER = 2.2
  * 路口红绿灯：每个路口两组（南北 / 东西），相位互斥。
  * 灯杆摆在路口的两个对角上，灯面分别朝向对应方向的车流。
  */
+/** 充电站世界包围盒：路口红绿灯不摆进站内 */
+const CHARGING_WORLD = {
+  minX: CHARGING.minX + CHARGING_OFFSET.x,
+  maxX: CHARGING.maxX + CHARGING_OFFSET.x,
+  minZ: CHARGING.minZ + CHARGING_OFFSET.z,
+  maxZ: CHARGING.maxZ + CHARGING_OFFSET.z
+}
+
 export default function TrafficLights() {
   const junctions = SIGNAL_JUNCTIONS.map(([a, b]) => [verticalRoadX(a), horizontalRoadZ(b)])
+    .filter(([x, z]) =>
+      x < CHARGING_WORLD.minX || x > CHARGING_WORLD.maxX ||
+      z < CHARGING_WORLD.minZ || z > CHARGING_WORLD.maxZ
+    )
 
   return (
     <group>

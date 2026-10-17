@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { TIME_OPTIONS, getWindLabel } from '@/three/environments'
+import { CAMERA_VIEWS } from '@/three/cameraViews'
 import { WEATHER_OPTIONS } from '@/three/weather'
 import './index.less'
 
 export default function ControlPanel({
+  cameraView,
+  onCameraViewChange,
   timeOfDay,
   onTimeOfDayChange,
   weather,
@@ -26,6 +29,22 @@ export default function ControlPanel({
       {/* 固定宽度的内层：折叠时被外层 overflow 裁掉，内容不会边收边重排 */}
       {/* inert 让收起后的按钮退出 Tab 顺序，不然键盘还能 Tab 进看不见的控件 */}
       <div className="panel__inner" inert={collapsed}>
+        <section className="panel__section">
+          <h3 className="panel__label">摄像机视角</h3>
+          <div className="panel__shapes" role="group" aria-label="摄像机视角">
+            {CAMERA_VIEWS.map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                className={`panel__shape-btn ${cameraView?.key === view.key ? 'is-active' : ''}`}
+                aria-pressed={cameraView?.key === view.key}
+                onClick={() => onCameraViewChange(view)}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        </section>
         <section className="panel__section">
           <h3 className="panel__label">环境</h3>
           <div className="panel__shapes">

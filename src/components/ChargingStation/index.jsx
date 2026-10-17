@@ -19,9 +19,9 @@ const ARRIVAL_TIME = 11
 const CYCLE_TIME = 30
 const NORTH_AISLE_Z = CHARGING.canopy.maxZ + 4
 const CAR_PATH = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(CHARGING.minX - 3.5, 0, CHARGING.gate.z),
-  new THREE.Vector3(CHARGING.minX + 5.5, 0, CHARGING.gate.z),
-  new THREE.Vector3(CHARGING.minX + 6, 0, NORTH_AISLE_Z),
+  new THREE.Vector3(CHARGING.minX - 6, 0, CHARGING.gate.z),      // 马路上
+  new THREE.Vector3(CHARGING.minX + 2, 0, CHARGING.gate.z),      // 进门
+  new THREE.Vector3(CHARGING.minX + 2.5, 0, NORTH_AISLE_Z),
   new THREE.Vector3(CHARGING.bay.x0 + CHARGING.bay.w / 2, 0, NORTH_AISLE_Z),
   new THREE.Vector3(CHARGING.bay.x0 + CHARGING.bay.w / 2, 0, CHARGING.bay.rowCenterZ[2])
 ])
@@ -118,7 +118,7 @@ function ArrivingCar() {
  *   · 围栏段 —— 每段自己的重复贴图，单独材质
  *   · 顶棚光伏 —— 一个 InstancedMesh，颜色走 instanceColor
  *   · 充电线 —— 每台在充电的车一条，从充电桩枪座垂到车头充电口（TubeGeometry 贝塞尔下垂）
- *   · 门楣站名招牌 —— 「新能源超级充电站」，朝站外 / 站内各一面
+ *   · 门楣站名招牌 —— 「新能源超级充电站」，只朝马路一侧
  *   · 驶入车辆 —— 沿站内通道开进空车位，停稳后点亮充电指示并接出充电线
  */
 export default function ChargingStation() {
@@ -200,10 +200,8 @@ export default function ChargingStation() {
         <mesh key={`cable${i}`} geometry={cableGeos[i]} material={cableMat} castShadow />
       ))}
 
-      {/* 门楣站名招牌：朝站外 / 站内各一面 */}
-      {Object.values(sign).map((s, i) => (
-        <StationSign key={`sign${i}`} position={s.position} rotationY={s.rotationY} width={s.width} height={s.height} />
-      ))}
+      {/* 门楣站名招牌：只保留朝马路一侧 */}
+      <StationSign position={sign.position} rotationY={sign.rotationY} width={sign.width} height={sign.height} />
 
       <ArrivingCar />
     </group>

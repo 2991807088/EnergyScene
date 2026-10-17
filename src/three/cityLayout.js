@@ -1,11 +1,16 @@
-// 城区布局的统一坐标：30×30 个街区，外围留出路缘空间。
+// 原有 30×30 街区保持原位，向 +z 空地延伸 15 排，外围留出路缘空间。
 export const GROUND_SIZE = 500
 export const CITY_HALF = GROUND_SIZE / 2 + 1
 export const CITY_EXPANSION = (GROUND_SIZE - 200) / 2
 export const TILE = 16
 export const GRID_N = 30
+export const EXTRA_Z_BLOCKS = 15
+export const CITY_EXTENSION_Z = EXTRA_Z_BLOCKS * TILE
+export const CITY_DEPTH = GROUND_SIZE + CITY_EXTENSION_Z
+export const CITY_BOUNDS = { minX: -GROUND_SIZE / 2, maxX: GROUND_SIZE / 2, minZ: -GROUND_SIZE / 2, maxZ: GROUND_SIZE / 2 + CITY_EXTENSION_Z }
 export const GRID_MIN = -GRID_N * TILE / 2
 export const GRID_MAX = -GRID_MIN
+export const GRID_Z_MAX = GRID_MAX + CITY_EXTENSION_Z
 export const ROAD_WIDTH = 5.6
 export const CURB = 0.8
 export const ASPHALT = ROAD_WIDTH - CURB * 2
@@ -14,13 +19,14 @@ export const ROAD_MAX = GRID_MAX
 
 // 外环、分区主干道与中心道路；支路在场站边界处停止。
 export const ROAD_LINES = [0, ...Array.from({ length: 6 }, (_, i) => i * 4 + 5), GRID_N]
+export const ROAD_Z_LINES = [...ROAD_LINES, -3, -7, -11, -EXTRA_Z_BLOCKS]
 export const CORE_ROAD_LINES = [13, 17]
 export const LOCAL_ROAD_LINES = []
 export const verticalRoadX = (n) => GRID_MIN + n * TILE
 export const horizontalRoadZ = (n) => GRID_MAX - n * TILE
 export const blockCenterX = (n) => GRID_MIN + TILE / 2 + n * TILE
 export const blockCenterZ = (n) => GRID_MAX - TILE / 2 - n * TILE
-export const SIGNAL_JUNCTIONS = ROAD_LINES.flatMap((a) => ROAD_LINES.map((b) => [a, b]))
+export const SIGNAL_JUNCTIONS = ROAD_LINES.flatMap((a) => ROAD_Z_LINES.map((b) => [a, b]))
 
 /** 西侧纵向公园；地面、树木和水系共用这一块边界。 */
 export const CENTRAL_PARK = {

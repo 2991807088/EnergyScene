@@ -8,7 +8,7 @@
 //    「太阳比山/风机还低」这种看着不合理的画面
 // ============================================================
 import * as THREE from 'three'
-import { CITY_HALF, EAST_SITES, mulberry32 } from './cityLayout'
+import { CITY_HALF, CITY_EXTENSION_Z, EAST_SITES, mulberry32 } from './cityLayout'
 import { RIVER, riverCarve, riverContains, riverSample } from './river'
 
 export const TERRAIN_HALF = 500
@@ -109,7 +109,7 @@ export function terrainHeight(x, z) {
 
 /** 自然地形高度（未施加城北厂区平整） */
 function naturalHeight(x, z) {
-  const sq = Math.max(Math.abs(x), Math.abs(z))
+  const sq = Math.max(Math.abs(x), -z, z - CITY_EXTENSION_Z)
   if (sq <= CITY_HALF) return 0 // 城区：保持水平
 
   const fade = smoothstep(CITY_HALF, CITY_HALF + APRON_FADE, sq)

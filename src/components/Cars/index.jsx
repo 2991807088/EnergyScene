@@ -6,7 +6,9 @@ import {
   horizontalRoadZ,
   ROAD_MIN,
   ROAD_MAX,
+  GRID_Z_MAX,
   ROAD_LINES,
+  ROAD_Z_LINES,
   CORE_ROAD_LINES,
   ROAD_WIDTH,
   ASPHALT,
@@ -14,6 +16,7 @@ import {
 } from '@/three/cityLayout'
 import { signalAt } from '@/three/traffic'
 import { CAR_SPECS, ALL_CAR_MODEL_URLS, bakeCarModel } from '@/three/carModels'
+import { CHARGING, CHARGING_OFFSET } from '@/three/chargingStation'
 
 /**
  * 两轴上的路口网格坐标（车到路口前据此判断是否该停）。
@@ -22,7 +25,7 @@ import { CAR_SPECS, ALL_CAR_MODEL_URLS, bakeCarModel } from '@/three/carModels'
  * 沿 x 走的车（在横路上）要看竖向路的位置 → JUNCTIONS_X。
  */
 const JUNCTIONS_X = ROAD_LINES.map((n) => verticalRoadX(n))
-const JUNCTIONS_Z = ROAD_LINES.map((n) => horizontalRoadZ(n))
+const JUNCTIONS_Z = ROAD_Z_LINES.map((n) => horizontalRoadZ(n))
 
 /** 停止线距路口中心的距离 */
 const STOP_DIST = ROAD_WIDTH / 2 + 2.4
@@ -32,6 +35,24 @@ const LANE_OFF = ASPHALT / 4
 
 /** 跑车的道路（网格线序号）—— 正好是中心广场四角那四条 */
 const LANE_LINES = CORE_ROAD_LINES
+
+/** 充电站世界包围盒：车辆必须绕行 */
+const CHARGING_WORLD = {
+  minX: CHARGING.minX + CHARGING_OFFSET.x,
+  maxX: CHARGING.maxX + CHARGING_OFFSET.x,
+  minZ: CHARGING.minZ + CHARGING_OFFSET.z,
+  maxZ: CHARGING.maxZ + CHARGING_OFFSET.z
+}
+
+/** 某条车道被充电站切断后，返回仍在马路上的若干段 */
+function laneSegments(axis, fixed) {
+  if (axis === 'z') {
+    if (fixed < CHARGING_WORLD.minX || fixed > CHARGING_WORLD.maxX) return [[ROAD_MIN, GRID_Z_MAX]]
+    return [[ROAD_MIN, CHARGING_WORLD.minZ], [CHARGING_WORLD.maxZ, GRID_Z_MAX]]
+  }
+  if (fixed < CHARGING_WORLD.minZ || fixed > CHARGING_WORLD.maxZ) return [[ROAD_MIN, ROAD_MAX]]
+  return [[ROAD_MIN, CHARGING_WORLD.minX], [CHARGING_WORLD.maxX, ROAD_MAX]]
+}
 
 /** 车型按权重混排：轿车为主，货车/公交点缀（权重和不必为 1） */
 const TYPE_WEIGHTS = [
@@ -81,13 +102,22 @@ function generateCars() {
 
   for (const n of LANE_LINES) {
     const vx = verticalRoadX(n)
-    lanes.push({ axis: 'z', fixed: vx - LANE_OFF, dir: 1 })
-    lanes.push({ axis: 'z', fixed: vx + LANE_OFF, dir: -1 })
+    // 被充电站截断的纵向干道（x=-32）：南北两段都成了断头路。
+    // 断头路不排过境车流——否则车开到站边会凭空消失/冒出，看着像进出站。
+    if (vx > CHARGING_WORLD.minX && vx < CHARGING_WORLD.maxX) continue
+    for (const fixed of [vx - LANE_OFF, vx + LANE_OFF]) {
+      for (const [lo, hi] of laneSegments('z', fixed)) {
+        lanes.push({ axis: 'z', fixed, dir: fixed < vx ? 1 : -1, lo, hi })
+      }
+    }
 
     if (n !== CORE_ROAD_LINES[1]) { // 公园内中断的横路不通车
       const hz = horizontalRoadZ(n)
-      lanes.push({ axis: 'x', fixed: hz + LANE_OFF, dir: 1 })
-      lanes.push({ axis: 'x', fixed: hz - LANE_OFF, dir: -1 })
+      for (const fixed of [hz + LANE_OFF, hz - LANE_OFF]) {
+        for (const [lo, hi] of laneSegments('x', fixed)) {
+          lanes.push({ axis: 'x', fixed, dir: fixed < hz ? -1 : 1, lo, hi })
+        }
+      }
     }
   }
 
@@ -95,7 +125,7 @@ function generateCars() {
   for (const lane of lanes) {
     const count = 2 + Math.floor(rand() * 2)
     for (let i = 0; i < count; i++) {
-      const along = ROAD_MIN + rand() * (ROAD_MAX - ROAD_MIN)
+      const along = lane.lo + rand() * (lane.hi - lane.lo)
       const rotationY =
         lane.axis === 'x'
           ? lane.dir > 0
@@ -167,9 +197,9 @@ function CarsInner() {
         }
       }
 
-      // 出界循环
-      if (next > ROAD_MAX) next = ROAD_MIN
-      else if (next < ROAD_MIN) next = ROAD_MAX
+      // 出界循环（分段车道只在各自路段内循环）
+      if (next > car.hi) next = car.lo
+      else if (next < car.lo) next = car.hi
 
       el.position[axis] = next
     }

@@ -55,7 +55,8 @@ function labelMaterial(text) {
 // 风/火共用一列铁塔；风电线路第二塔旁接入火电。前两路只在指定点立塔。
 export const EAST_GRID_ROUTES = [
   { key: 'wind', points: [[310, windStationZ - 34], [300, thermal.maxZ - 12], [282, 160], [268, 68], [240, 18]], fixedTowers: true },
-  { key: 'solar', points: [[310, 40], [270, 4], [240, -18]], fixedTowers: true },
+  // 光伏沿站前走廊直行，在转角塔处向变电站转 90°；横担沿转角平分线布置。
+  { key: 'solar', points: [[310, 40], [310, -18], [area.maxX - 10, -18]], towerAngles: [0, -Math.PI / 4], fixedTowers: true },
   // 水电改走城区另一侧，避免与风/火主线在东侧并排。
   { key: 'hydro', points: [[OUTLINE_TOWER.x, OUTLINE_TOWER.z], [-outsideCity, -outsideCity], [outsideCity, -outsideCity], [outsideCity, -70], [200, -70]], towerSpacing: 95 }
 ]
@@ -156,28 +157,28 @@ export function buildEastSubstation() {
   const busPhaseX = [cx + 0.6, cx + 4, cx + 7.4]
   for (const bx of busPhaseX) beam([bx, floorY + 7, -34], [bx, floorY + 7, 34], 0.13)
 
-  // 进线门架
-  function gantry(x, z, angle, title) {
+  // 进线门架（baseY 默认站内地坪；厂区受电门架用厂房区地坪）
+  function gantry(x, z, angle, title, baseY = floorY) {
     const axis = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle))
     for (const side of [-1, 1]) {
       const px = x + axis.x * side * 5
       const pz = z + axis.z * side * 5
-      box(concrete, [px, floorY + 0.3, pz], [2, 0.6, 2])
-      cylinder(steel, [px, floorY + 5, pz], 0.2, 10)
+      box(concrete, [px, baseY + 0.3, pz], [2, 0.6, 2])
+      cylinder(steel, [px, baseY + 5, pz], 0.2, 10)
     }
-    beam([x - axis.x * 5.5, floorY + 10, z - axis.z * 5.5], [x + axis.x * 5.5, floorY + 10, z + axis.z * 5.5], 0.22)
+    beam([x - axis.x * 5.5, baseY + 10, z - axis.z * 5.5], [x + axis.x * 5.5, baseY + 10, z + axis.z * 5.5], 0.22)
     const sockets = [-3.4, 0, 3.4].map((offset) => {
       const px = x + axis.x * offset
       const pz = z + axis.z * offset
-      insulator(px, floorY + 8.5, pz, 1.4)
-      return [px, floorY + 8.5, pz]
+      insulator(px, baseY + 8.5, pz, 1.4)
+      return [px, baseY + 8.5, pz]
     })
-    box(labelMaterial(title), [x, floorY + 6.5, z - 0.22], [8, 1.7, 0.12])
+    box(labelMaterial(title), [x, baseY + 6.5, z - 0.22], [8, 1.7, 0.12])
     return sockets
   }
   const terminals = {
     wind: gantry(area.maxX - 10, 18, 0, '风火进线'),
-    solar: gantry(area.maxX - 10, -18, 0, '光伏进线'),
+    solar: gantry(area.maxX - 10, -18, -Math.PI / 2, '光伏进线'),
     hydro: gantry(200, area.minZ + 12, 0, '水电进线')
   }
 
@@ -249,7 +250,7 @@ export function buildEastSubstation() {
     }
     const sockets = towerPoints.map((point, i) => {
       const next = towerPoints[i + 1] ?? route.points.at(-1)
-      return pylon(point[0], point[1], Math.atan2(next[0] - point[0], next[1] - point[1]))
+      return pylon(point[0], point[1], route.towerAngles?.[i] ?? Math.atan2(next[0] - point[0], next[1] - point[1]))
     })
     sockets.push(terminals[route.key])
     if (route.key === 'wind') {
@@ -315,6 +316,100 @@ export function buildEastSubstation() {
       })
       wires.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 24, 0.12, 5, false))
     }
+  }
+
+  // 工厂线先沿 +x 离站，在站前走廊转 90°，沿 -z 接入厂区边缘。
+  // 转角横担取两段走线的平分方向，三相挂点保持顺序。
+  const factoryGantryX = area.maxX - 10
+  const factoryGantryZ = -34
+  const stationX = 310
+  const stationZ = -184
+  const factoryGantry = gantry(factoryGantryX, factoryGantryZ, Math.PI / 2, '工厂出线')
+  const stationBase = terrainHeight(stationX, stationZ)
+  const factoryTerminal = gantry(stationX, stationZ, Math.PI, '厂区配电', stationBase)
+  const factoryCorner = pylon(stationX, factoryGantryZ, Math.PI * 3 / 4)
+  const factoryTower = pylon(stationX, (factoryGantryZ + stationZ) / 2, Math.PI)
+  const factoryPhases = [0, 1, 2].map((phase) => ({ key: 'factory', phase, segments: [], length: 0 }))
+  let factoryPrev = factoryGantry
+  for (const next of [factoryCorner, factoryTower, factoryTerminal]) {
+    for (let phase = 0; phase < 3; phase++) {
+      const line = factoryPhases[phase]
+      const curve = cable(factoryPrev[phase], next[phase])
+      const length = curve.getLength()
+      line.segments.push({ curve, start: line.length, length })
+      line.length += length
+    }
+    factoryPrev = next
+  }
+  flowLines.push(...factoryPhases)
+
+  // 接线站围栏 + 地坪 + 主变压器 + 4 个配出箱
+  const fenceW = 7
+  const fenceD = 7
+  const fenceMinX = stationX - fenceW / 2
+  const fenceMaxX = stationX + fenceW / 2
+  const fenceMinZ = stationZ - fenceD / 2
+  const fenceMaxZ = stationZ + fenceD / 2
+  const stationFenceSpan = (a, b) => {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+    const count = Math.ceil(length / 2)
+    for (let i = 0; i <= count; i++) {
+      const x = THREE.MathUtils.lerp(a[0], b[0], i / count)
+      const z = THREE.MathUtils.lerp(a[1], b[1], i / count)
+      cylinder(steel, [x, stationBase + 1.2, z], 0.07, 2.4)
+    }
+    for (const height of [0.4, 0.9, 1.4, 1.9, 2.3]) {
+      line([a[0], stationBase + height, a[1]], [b[0], stationBase + height, b[1]])
+    }
+  }
+  stationFenceSpan([fenceMinX, fenceMinZ], [fenceMaxX, fenceMinZ])
+  stationFenceSpan([fenceMinX, fenceMaxZ], [fenceMaxX, fenceMaxZ])
+  stationFenceSpan([fenceMinX, fenceMinZ], [fenceMinX, fenceMaxZ])
+  stationFenceSpan([fenceMaxX, fenceMinZ], [fenceMaxX, fenceMaxZ])
+  box(concrete, [stationX, stationBase + 0.05, stationZ], [fenceW - 0.4, 0.1, fenceD - 0.4])
+  // 主变压器
+  box(concrete, [stationX - 1.6, stationBase + 0.3, stationZ - 0.6], [2.6, 0.6, 2.2])
+  box(transformer, [stationX - 1.6, stationBase + 1.5, stationZ - 0.6], [2, 2, 1.8])
+  cylinder(transformer, [stationX - 1.6, stationBase + 3.1, stationZ - 0.6], 0.45, 4.4, [0, 0, Math.PI / 2])
+  insulator(stationX - 1.6, stationBase + 1.5, stationZ + 0.3, 1.4)
+  // 4 个配出箱（围栏内侧四角，3 个用、1 个备用）
+  const feederOutlets = [
+    [fenceMinX + 0.7, fenceMinZ + 0.7],
+    [fenceMaxX - 0.7, fenceMinZ + 0.7],
+    [fenceMaxX - 0.7, fenceMaxZ - 0.7]
+  ]
+  for (const [bx, bz] of feederOutlets) {
+    box(concrete, [bx, stationBase + 0.3, bz], [1, 0.6, 1])
+    box(steel, [bx, stationBase + 0.7, bz], [0.5, 0.2, 0.5])
+    box(warning, [bx, stationBase + 0.85, bz], [0.6, 0.35, 0.04])
+  }
+  // 备用角位（不接馈线，仅留接口标记）
+  const standbyBox = [fenceMinX + 0.7, fenceMaxZ - 0.7]
+  box(concrete, [standbyBox[0], stationBase + 0.3, standbyBox[1]], [1, 0.6, 1])
+  box(warning, [standbyBox[0], stationBase + 0.7, standbyBox[1]], [0.6, 0.3, 0.04])
+
+  // 3 条贴地馈线接到 row4 内 3 座 D 厂房北端
+  // 厂房位置（Hall 组件生成）：center x = 337.67/395/452.33, z = (minZ+maxZ)/2 = -212.5
+  // 厂房 d = 49，z 范围 -237 ~ -188，北端 z = -188
+  const row4HallZ = (EAST_SITES.factoryRow4.minZ + EAST_SITES.factoryRow4.maxZ) / 2  // -212.5
+  const row4HallBase = terrainHeight((EAST_SITES.factoryRow4.minX + EAST_SITES.factoryRow4.maxX) / 2, row4HallZ)
+  const feederTargets = [
+    { outlet: feederOutlets[0], hallX: 337.67 },  // D1
+    { outlet: feederOutlets[1], hallX: 395 },     // D2
+    { outlet: feederOutlets[2], hallX: 452.33 }   // D3
+  ]
+  for (const { outlet, hallX } of feederTargets) {
+    const start = [outlet[0], stationBase + 0.32, outlet[1]]
+    const end = [hallX, row4HallBase + 1.2, EAST_SITES.factoryRow4.maxZ - 0.5]
+    const points = Array.from({ length: 17 }, (_, i) => {
+      const t = i / 16
+      return new THREE.Vector3(
+        lerp(start[0], end[0], t),
+        lerp(start[1], end[1], t),
+        lerp(start[2], end[2], t)
+      )
+    })
+    wires.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 20, 0.1, 5, false))
   }
 
   // 站区围栏（南侧留门，朝向城区）

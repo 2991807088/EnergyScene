@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { MeshReflectorMaterial } from '@react-three/drei'
 import { createCityTexture } from '@/three/cityTexture'
-import { GROUND_SIZE } from '@/three/cityLayout'
+import { GROUND_SIZE, CITY_DEPTH, CITY_EXTENSION_Z } from '@/three/cityLayout'
 
 const lerp = (a, b, t) => a + (b - a) * t
 
@@ -30,8 +30,8 @@ export default function CityGround({ appearance }) {
   })
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, CITY_EXTENSION_Z / 2]} receiveShadow>
+      <planeGeometry args={[GROUND_SIZE, CITY_DEPTH]} />
       <MeshReflectorMaterial
         ref={matRef}
         map={map}

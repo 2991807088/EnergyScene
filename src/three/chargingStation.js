@@ -26,7 +26,7 @@
 //    · 车辆   12 台电动车停在车位里充电（车头朝通道，车身带充电指示灯，充电线接桩）
 //    · 南侧   管理/配电房
 //    · 出入口 开在西侧 x = minX（正对 x = 16 的中心干道），全场唯一；
-//             门楣挂「新能源超级充电站」招牌（正反两面，见组件内 StationSign）
+//             门楣挂「新能源超级充电站」招牌（只朝马路一侧，见组件内 StationSign）
 //
 //  与其它模块的关系：
 //    · 建筑（buildings.js）要避让本站，见 isInsideChargingStation()
@@ -38,37 +38,39 @@ import { SOLAR_MATERIALS, SOLAR_PANEL_TINT, SOLAR_TABLE } from './solarFarm'
 const DEG = Math.PI / 180
 export const CHARGING_OFFSET = { x: -88, z: -64 }
 
-/** 场地（围栏）范围与各分区参数 */
+/** 场地（围栏）范围与各分区参数
+ *  铺满 CITY_ZONES.charging：x∈[-92,28] / z∈[-156,-100]（世界坐标），
+ *  相对四周马路中心线内缩 4 单位，留出人行道/路缘。
+ *  CHARGING_OFFSET = {-88,-64}，因此本地坐标 x∈[-4,116] / z∈[-92,-36]。 */
 export const CHARGING = {
-  // 围栏矩形 = 红框内缩 3（红框 x∈[16,96] z∈[-96,-32]）
-  minX: 19,
-  maxX: 93,
-  minZ: -93,
-  maxZ: -35,
+  minX: -4,
+  maxX: 116,
+  minZ: -92,
+  maxZ: -36,
 
   fenceH: 2.4,
   fenceT: 0.14,
 
-  /** 唯一出入口：开在西侧 x = minX（朝 x = 16 的中心干道） */
+  /** 唯一出入口：开在西侧 x = minX，正对 x = -96 的纵向马路 */
   gate: { z: -64, width: 12 },
 
-  /** 储能集装箱：北侧一排 6 台 */
+  /** 储能集装箱：南侧一排 8 台 */
   bess: {
-    count: 6,
+    count: 8,
     w: 6.0, // 沿 x
     h: 2.7,
     d: 2.6, // 沿 z
-    pitch: 11.5,
-    firstX: 29.5,
-    z: -39.5
+    pitch: 13.0,
+    firstX: 14.5,
+    z: -44.0
   },
 
   /** 光伏顶棚 */
   canopy: {
-    minX: 28,
-    maxX: 84,
-    minZ: -84,
-    maxZ: -54,
+    minX: 10,
+    maxX: 108,
+    minZ: -82,
+    maxZ: -50,
     colH: 5.8,
     roofT: 0.18,
     panelTiltDeg: 10,
@@ -79,18 +81,17 @@ export const CHARGING = {
 
   /**
    * 充电车位：三排
-   *   0 排 —— 顶棚南侧的**露天**充电位。刻意留一排在外，是为了让「车在充电」
-   *          这件事从棚顶被压住的视角下依然看得见（棚下那一排从斜上方基本被板遮死）
+   *   0 排 —— 顶棚北侧的**露天**充电位
    *   1 排 —— 顶棚下南半侧
    *   2 排 —— 顶棚下北半侧
    * sgn 表示车头朝向（+1 朝 +z），约定一律朝通道。
    */
   bay: {
-    perRow: 10,
+    perRow: 14,
     w: 4.0, // 单个车位宽（沿 x）
     d: 5.5, // 车位深（沿 z）
-    x0: 34, // 第一排车位左边界
-    rowCenterZ: [-90, -79.75, -58.25],
+    x0: 16, // 第一排车位左边界
+    rowCenterZ: [-88, -74, -58],
     rowHead: [1, 1, -1],
     lineW: 0.13
   },
@@ -347,9 +348,8 @@ export function buildChargingStation() {
   const ccz = (C.minZ + C.maxZ) / 2
   const colT = 0.34
 
-  // 柱列刻意落在车位分隔线上（x = 38/50/62/74 都是车位边界），
-  // 两端 28 / 84 在车位区之外，避免立柱戳在车位正中挡车
-  const colXs = [C.minX, 38, 50, 62, 74, C.maxX]
+  // 柱列撑在顶棚长向，中间几根避开通道和车位入口
+  const colXs = [C.minX, 30, 52, 74, 96, C.maxX]
   const colZs = [C.minZ, (C.minZ + C.maxZ) / 2, C.maxZ]
   for (const px of colXs) {
     for (const pz of colZs) {
@@ -440,11 +440,11 @@ export function buildChargingStation() {
     cars.push({ x: px, z: rz, row: plan.row })
   })
 
-  // ---- 6) 管理 / 配电房（东南角，避开露天充电排）----
-  box(M.trim, [88.0, 1.7, -88.5], [7.0, 3.4, 6.4])
-  box(M.deck, [88.0, 3.52, -88.5], [7.6, 0.24, 7.0])
+  // ---- 6) 管理 / 配电房（东南角，避开入口通道）----
+  box(M.trim, [100.0, 1.7, -82.0], [7.0, 3.4, 6.4])
+  box(M.deck, [100.0, 3.52, -82.0], [7.6, 0.24, 7.0])
   // 设备房外的配电箱
-  box(M.charger, [84.0, 0.85, -88.5], [1.4, 1.7, 1.0])
+  box(M.charger, [96.0, 0.85, -82.0], [1.4, 1.7, 1.0])
 
   // ---- 7) 围栏（唯一缺口在西侧 x = minX）----
   const fence = []
@@ -469,20 +469,18 @@ export function buildChargingStation() {
   box(M.steel, [minX, 1.6, g0], [0.9, 3.2, 0.9])
   box(M.steel, [minX, 1.6, g1], [0.9, 3.2, 0.9])
   box(M.steel, [minX, 3.34, g.z], [0.7, 0.42, g.width + 1.2])
-  // 招牌背板（坐在横梁上，正反两面贴站名，贴图面见组件内 StationSign）
+  // 招牌背板（坐在横梁上，站名只贴朝马路一侧，贴图面见组件内 StationSign）
   box(M.deck, [minX - 0.1, 4.55, g.z], [0.34, 2.0, g.width - 0.4])
   // 上下挑檐
   box(M.trim, [minX - 0.1, 5.63, g.z], [0.42, 0.16, g.width - 0.2])
   box(M.trim, [minX - 0.1, 3.47, g.z], [0.42, 0.14, g.width - 0.2])
   const SIGN_W = g.width - 1.2
   const SIGN_H = (SIGN_W * 160) / 1024 // 与 canvas 1024x160 同比例
-  const sign = {
-    front: { position: [minX - 0.29, 4.55, g.z], rotationY: -Math.PI / 2, width: SIGN_W, height: SIGN_H },
-    back: { position: [minX + 0.09, 4.55, g.z], rotationY: Math.PI / 2, width: SIGN_W, height: SIGN_H }
-  }
+  // 门头招牌只保留朝马路一侧（西侧）
+  const sign = { position: [minX - 0.29, 4.55, g.z], rotationY: -Math.PI / 2, width: SIGN_W, height: SIGN_H }
 
-  // ---- 9) 出入口铺装：从大门一直铺到马路边 ----
-  box(M.asphalt, [minX - 1.1, 0.055, g.z], [2.6, 0.07, g.width])
+  // ---- 9) 出入口铺装：从大门一直铺到马路中心（x=-8 本地）----
+  box(M.asphalt, [minX - 4, 0.055, g.z], [8, 0.07, g.width])
 
   return {
     boxes,

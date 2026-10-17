@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { OrbitControls } from '@react-three/drei'
@@ -15,6 +15,7 @@ import Pond from '@/components/Pond'
 import River from '@/components/River'
 import TrafficLights from '@/components/TrafficLights'
 import Cars from '@/components/Cars'
+import People from '@/components/People'
 import Weather from '@/components/Weather'
 import Sun from '@/components/Sun'
 import { mergeEnvironment } from '@/three/weather'
@@ -109,57 +110,24 @@ function DayNightRig({ preset, weather }) {
   )
 }
 
-/** 临时取景探针：?cam=x,y,z&target=x,y,z（校验用，验证完删除） */
-function CamProbe() {
+/** 同时更新相机和观察中心，切换后继续允许拖拽、缩放和平移。 */
+function CameraView({ view }) {
   const { camera, controls } = useThree()
-  useEffect(() => {
-    console.log('[CamProbe] mounted, cam=', camera.position.toArray().map((v) => +v.toFixed(1)))
-    let tries = 0
-    const apply = () => {
-      const q = new URLSearchParams(window.location.search)
-      const cam = q.get('cam')
-      const tgt = q.get('target')
-      if (cam) camera.position.set(...cam.split(',').map(Number))
-      if (tgt && controls) {
-        controls.target.set(...tgt.split(',').map(Number))
-        controls.update()
-        return true
-      }
-      return false
-    }
-    // makeDefault 的 controls 可能晚于本 effect 就绪，重试直到设置成功
-    const timer = setInterval(() => {
-      const done = apply() || ++tries > 20
-      if (done) {
-        clearInterval(timer)
-        console.log(
-          '[CamProbe] final cam=',
-          camera.position.toArray().map((v) => +v.toFixed(1)),
-          'target=',
-          controls?.target.toArray().map((v) => +v.toFixed(1)),
-          'search=',
-          window.location.search
-        )
-        let ticks = 0
-        const monitor = setInterval(() => {
-          console.log(
-            '[CamProbe] t+' + ++ticks + 's cam=',
-            camera.position.toArray().map((v) => +v.toFixed(1)),
-            'target=',
-            controls?.target.toArray().map((v) => +v.toFixed(1)),
-            'fov=',
-            camera.fov
-          )
-          if (ticks >= 4) clearInterval(monitor)
-        }, 2000)
-      }
-    }, 250)
-    return () => clearInterval(timer)
-  }, [camera, controls])
+  useLayoutEffect(() => {
+    if (!view || !controls) return
+    // 清空上次拖拽的惯性，避免选定视角后继续漂移。
+    const damping = controls.enableDamping
+    controls.enableDamping = false
+    controls.update()
+    camera.position.set(...view.position)
+    controls.target.set(...view.target)
+    controls.update()
+    controls.enableDamping = damping
+  }, [camera, controls, view])
   return null
 }
 
-export default function Scene({ mode = 'night', weather = 'clear', wind = 0, buildingLight = 1, turbineCount = 48, thermalGenerating = true, hydroGenerating = true }) {
+export default function Scene({ cameraView, mode = 'night', weather = 'clear', wind = 0, buildingLight = 1, turbineCount = 48, thermalGenerating = true, hydroGenerating = true }) {
   const preset = useMemo(() => mergeEnvironment(mode, weather), [mode, weather])
 
   return (
@@ -200,6 +168,8 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
 
         <Cars />
 
+        <People />
+
         <Weather weather={weather} wind={wind} />
 
         <CityGround appearance={preset.ground} />
@@ -218,7 +188,7 @@ export default function Scene({ mode = 'night', weather = 'clear', wind = 0, bui
           maxPolarAngle={Math.PI / 2 - 0.02}
         />
 
-        <CamProbe />
+        <CameraView view={cameraView} />
       </Canvas>
     </div>
   )

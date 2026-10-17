@@ -15,6 +15,7 @@ const VERTEX_SHADER = /* glsl */ `
   attribute float aRot;
 
   uniform float uScale;
+  uniform float uSizeScale;
 
   varying float vAlpha;
   varying float vRot;
@@ -25,7 +26,7 @@ const VERTEX_SHADER = /* glsl */ `
 
     vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
     // uScale 已含画布物理高度与相机 fov，aSize 直接就是世界单位下的直径
-    gl_PointSize = aSize * uScale / max( -mvPosition.z, 0.001 );
+    gl_PointSize = aSize * uSizeScale * uScale / max( -mvPosition.z, 0.001 );
     gl_Position = projectionMatrix * mvPosition;
 
     #include <fog_vertex>
@@ -88,8 +89,11 @@ function Plume({ mouth, wind = 0 }) {
       ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       uMap: { value: puffTexture() },
       uColor: { value: new THREE.Color(SMOKE.color) },
-      uScale: { value: 600 }
+      uScale: { value: 600 },
+      uSizeScale: { value: mouth.size ?? 1 }
     }),
+    // mouth 只用于取一次尺寸系数（静态配置），不跟踪它的身份变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   )
 
@@ -148,7 +152,8 @@ function Plume({ mouth, wind = 0 }) {
 
 /**
  * 烟囱烟羽。
- * @param {Array<{x:number,y:number,z:number,radius:number}>} mouths 烟囱口（世界坐标）
+ * @param {Array<{x:number,y:number,z:number,radius:number,size?:number}>} mouths 烟囱口（世界坐标）
+ *        可选 size：烟团尺寸系数（冷却塔这类大口径冒汽口用 >1 让蒸汽更饱满）
  * @param {number} wind 风力等级，越大烟被吹得越平
  */
 export default function SmokePlume({ mouths = [], wind = 0 }) {

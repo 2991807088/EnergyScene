@@ -8,7 +8,7 @@
 //  - 输出「实例批次」：一个批次一个 InstancedMesh，几百棵树只要十几次 draw call
 // ============================================================
 import * as THREE from 'three'
-import { CITY_HALF, CENTRAL_PARK, EAST_SITES, PARK_AREAS, inArea, isInsideTrack, mulberry32 } from './cityLayout'
+import { CITY_HALF, CITY_BOUNDS, CENTRAL_PARK, EAST_SITES, PARK_AREAS, inArea, isInsideTrack, mulberry32 } from './cityLayout'
 import { terrainHeight, TERRAIN_HALF, TERRAIN_SEGMENTS } from './terrain'
 import { isInsideSolarFarm } from './solarFarm'
 import { POND, pondContains } from './pond'
@@ -227,6 +227,7 @@ export function pickTreeSpots(seed = 20261013) {
       if (Object.values(EAST_SITES).some((site) => inArea(tree.x, tree.z, site, 7))) continue
       // 长江水面与河滩上不长树（判定同样要放在 makeTree 之后）
       if (riverContains(tree.x, tree.z, 7)) continue
+      if (inArea(tree.x, tree.z, CITY_BOUNDS, 1)) continue
       trees.push(tree)
     }
   }

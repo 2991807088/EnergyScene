@@ -39,6 +39,8 @@ export default function EastSubstation({ wind = 0, thermalGenerating = true, hyd
   const windFlow = useMemo(() => flowLines.filter((line) => line.key === 'wind'), [flowLines])
   const thermalFlow = useMemo(() => flowLines.filter((line) => line.key === 'thermal'), [flowLines])
   const hydroFlow = useMemo(() => flowLines.filter((line) => line.key === 'hydro'), [flowLines])
+  // 工厂出线：电力流向 = 变电站 → 工厂（常显）
+  const factoryFlow = useMemo(() => flowLines.filter((line) => line.key === 'factory'), [flowLines])
   const windActive = getTurbineSpin(wind) > 0
   return (
     <group>
@@ -48,6 +50,7 @@ export default function EastSubstation({ wind = 0, thermalGenerating = true, hyd
       {windActive && <PowerFlow lines={windFlow} />}
       {thermalGenerating && !windActive && <PowerFlow lines={thermalFlow} />}
       {hydroGenerating && <PowerFlow lines={hydroFlow} />}
+      <PowerFlow lines={factoryFlow} />
       <lineSegments geometry={fenceGeometry} material={FENCE_MATERIAL} />
     </group>
   )

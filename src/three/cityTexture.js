@@ -1,22 +1,32 @@
 import * as THREE from 'three'
 import {
-  GROUND_SIZE, GRID_MIN, GRID_MAX, ROAD_LINES, LOCAL_ROAD_LINES,
-  ROAD_WIDTH, ASPHALT, CENTRAL_PARK, ATHLETICS_TRACK, PARK_AREAS, cityZone,
+  GROUND_SIZE, CITY_DEPTH, GRID_MIN, GRID_MAX, GRID_Z_MAX, ROAD_LINES, ROAD_Z_LINES, LOCAL_ROAD_LINES,
+  ROAD_WIDTH, ASPHALT, CENTRAL_PARK, ATHLETICS_TRACK, PARK_AREAS, CITY_ZONES, cityZone,
   verticalRoadX, horizontalRoadZ, mulberry32
 } from './cityLayout'
 import { POND, pondOutline } from './pond'
 
 const HALF = GROUND_SIZE / 2
-const RESERVED = [CENTRAL_PARK, ...PARK_AREAS]
+// 中央公园 + 充电站：主干道也要绕行（充电站内不能画马路）
+const MAJOR_RESERVED = [CENTRAL_PARK, CITY_ZONES.charging]
+const RESERVED = [...MAJOR_RESERVED, ...PARK_AREAS]
+
+// 被保留区（公园 / 充电站）打断的道路，断口对齐到相邻的横/纵路口线：
+// 路面干净地 T 进路口，不再向保留区伸出一小段"路舌"（容易看起来像出入口）。
+const H_ROAD_LINES = ROAD_Z_LINES.map((n) => horizontalRoadZ(n))
+const V_ROAD_LINES = ROAD_LINES.map((n) => verticalRoadX(n))
 
 function roadSegments(axis, coordinate, major) {
-  let segments = [[GRID_MIN, GRID_MAX]]
+  let segments = [[GRID_MIN, axis === 'z' ? GRID_Z_MAX : GRID_MAX]]
   for (const area of RESERVED) {
-    if (major && area !== CENTRAL_PARK) continue
+    if (major && !MAJOR_RESERVED.includes(area)) continue
     const fixed = axis === 'z' ? [area.minX, area.maxX] : [area.minZ, area.maxZ]
     if (coordinate < fixed[0] - 2 || coordinate > fixed[1] + 2) continue
-    const lo = (axis === 'z' ? area.minZ : area.minX) - 1
-    const hi = (axis === 'z' ? area.maxZ : area.maxX) + 1
+    const lines = axis === 'z' ? H_ROAD_LINES : V_ROAD_LINES
+    const alongMin = axis === 'z' ? area.minZ : area.minX
+    const alongMax = axis === 'z' ? area.maxZ : area.maxX
+    const lo = Math.max(...lines.filter((v) => v <= alongMin))
+    const hi = Math.min(...lines.filter((v) => v >= alongMax))
     segments = segments.flatMap(([a, b]) => {
       if (b <= lo || a >= hi) return [[a, b]]
       return [...(a < lo ? [[a, lo]] : []), ...(b > hi ? [[hi, b]] : [])]
@@ -25,18 +35,19 @@ function roadSegments(axis, coordinate, major) {
   return segments
 }
 
-export const CITY_ROADS = [
-  ...ROAD_LINES.map((n) => ({ n, major: true })),
-  ...LOCAL_ROAD_LINES.map((n) => ({ n, major: false }))
-].flatMap(({ n, major }) => ['x', 'z'].map((axis) => {
+export const CITY_ROADS = ['x', 'z'].flatMap((axis) => [
+  ...(axis === 'x' ? ROAD_Z_LINES : ROAD_LINES).map((n) => ({ n, major: true, axis })),
+  ...LOCAL_ROAD_LINES.map((n) => ({ n, major: false, axis }))
+]).map(({ n, major, axis }) => {
   const coordinate = axis === 'z' ? verticalRoadX(n) : horizontalRoadZ(n)
   return { axis, coordinate, major, width: major ? ROAD_WIDTH : 4, asphalt: major ? ASPHALT : 2.8, segments: roadSegments(axis, coordinate, major) }
-}))
+})
 
 /** 分区道路、街区庭院与公园，一张纹理覆盖整城，铺装接缝只出现在人行道。 */
 export function createCityTexture(size = 4096) {
   const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = size
+  canvas.width = size
+  canvas.height = Math.round(size * CITY_DEPTH / GROUND_SIZE)
   const ctx = canvas.getContext('2d')
   const scale = size / GROUND_SIZE
   const X = (x) => (x + HALF) * scale
@@ -55,7 +66,7 @@ export function createCityTexture(size = 4096) {
     ctx.fill()
   }
   const rand = mulberry32(4242)
-  rect(-HALF, -HALF, GROUND_SIZE, GROUND_SIZE, '#899181')
+  rect(-HALF, -HALF, GROUND_SIZE, CITY_DEPTH, '#899181')
   // 地块以真实道路围合边界划分，不再每 16 单位画一个铺装方格。
   const streetsX = CITY_ROADS.filter((r) => r.axis === 'z').sort((a, b) => a.coordinate - b.coordinate)
   const streetsZ = CITY_ROADS.filter((r) => r.axis === 'x').sort((a, b) => a.coordinate - b.coordinate)
@@ -131,7 +142,7 @@ export function createCityTexture(size = 4096) {
   poly(pondOutline(), '#3c5f7d')
   for (let i = 0; i < 16000; i++) {
     ctx.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)'
-    ctx.fillRect(rand() * size, rand() * size, 2, 2)
+    ctx.fillRect(rand() * size, rand() * canvas.height, 2, 2)
   }
   const strip = (road, lo, hi, width, offset, color) => {
     if (road.axis === 'z') rect(road.coordinate + offset - width / 2, lo, width, hi - lo, color)
